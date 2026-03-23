@@ -1,0 +1,73 @@
+{
+  "name": "@hyperledger-cacti/cacti-plugin-cbdc-controller",
+  "version": "0.0.1",
+  "description": "CBDC Interoperability Controller",
+  "keywords": [
+    "Hyperledger",
+    "Cacti",
+    "Integration",
+    "CBDC",
+    "Digital Currency",
+    "Compliance",
+    "Foreign Exchange",
+    "Blockchain",
+    "Distributed Ledger Technology",
+    "Interoperability"
+  ],
+  "packageManager": "yarn@4.3.1",
+  "homepage": "https://github.com/hyperledger-cacti/cacti#readme",
+  "bugs": {
+    "url": "https://github.com/hyperledger-cacti/cacti/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hyperledger-cacti/cacti.git"
+  },
+  "license": "Apache-2.0",
+  "author": {
+    "name": "Hyperledger Cacti Contributors",
+    "email": "cacti@lists.lfdecentralizedtrust.org",
+    "url": "https://www.lfdecentralizedtrust.org/projects/cacti"
+  },
+  "contributors": [
+    {
+      "name": "Please add yourself to the list of contributors",
+      "email": "your.name@example.com",
+      "url": "https://example.com"
+    },
+    {
+      "name": "Guilherme Marcondes",
+      "email": "guilherme.marcondes@tecnico.ulisboa.pt"
+    }
+  ],
+  "main": "dist/lib/main/typescript/index.js",
+  "module": "dist/lib/main/typescript/index.js",
+  "types": "dist/lib/main/typescript/index.d.ts",
+  "files": [
+    "dist/*"
+  ],
+  "scripts": {
+    "test": "jest  ./src/test/typescript",
+    "lint": "eslint --config ./eslint.config.mjs '**/*.{js,ts}' --quiet --fix"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.1.0",
+    "eslint-plugin-prettier": "^5.5.5",
+    "globals": "^17.4.0",
+    "jest": "^30.3.0",
+    "jest-util": "^30.3.0",
+    "prettier": "^3.8.1",
+    "ts-jest": "^29.4.6",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.57.1"
+  },
+  "engines": {
+    "node": ">= 20",
+    "npm": ">= 9"
+  },
+  "dependencies": {
+    "@hyperledger/cactus-common": "workspace:^",
+    "@hyperledger/cactus-core-api": "workspace:^"
+  }
+}

@@ -183,6 +183,9 @@
     },
     {
       "path": "./packages/cactus-plugin-persistence-fabric/tsconfig.json"
+    },
+    {
+      "path": "./packages/cacti-plugin-cbdc-controller/tsconfig.json"
     }
   ],
   "compilerOptions": {
