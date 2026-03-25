@@ -7094,7 +7094,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@grpc/grpc-js@npm:^1.10.9, @grpc/grpc-js@npm:^1.7.1":
+"@grpc/grpc-js@npm:^1.10.9, @grpc/grpc-js@npm:^1.11.1, @grpc/grpc-js@npm:^1.7.1":
   version: 1.14.3
   resolution: "@grpc/grpc-js@npm:1.14.3"
   dependencies:
@@ -7371,7 +7371,14 @@ __metadata:
   dependencies:
     "@eslint/js": "npm:^10.0.1"
     "@hyperledger/cactus-common": "workspace:^"
+    "@hyperledger/cactus-core": "workspace:^"
     "@hyperledger/cactus-core-api": "workspace:^"
+    "@hyperledger/cactus-plugin-keychain-memory": "workspace:^"
+    "@hyperledger/cactus-plugin-ledger-connector-besu": "workspace:^"
+    "@hyperledger/cactus-plugin-satp-hermes": "workspace:^"
+    "@hyperledger/cactus-test-tooling": "workspace:^"
+    "@types/dockerode": "npm:^4"
+    dockerode: "npm:^4.0.10"
     eslint: "npm:^10.1.0"
     eslint-plugin-prettier: "npm:^5.5.5"
     globals: "npm:^17.4.0"
@@ -7381,6 +7388,7 @@ __metadata:
     ts-jest: "npm:^29.4.6"
     typescript: "npm:^5.9.3"
     typescript-eslint: "npm:^8.57.1"
+    web3-core: "npm:^4.7.1"
   languageName: unknown
   linkType: soft
 
@@ -8035,7 +8043,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@hyperledger/cactus-core@npm:2.1.0, @hyperledger/cactus-core@workspace:packages/cactus-core":
+"@hyperledger/cactus-core@npm:2.1.0, @hyperledger/cactus-core@workspace:^, @hyperledger/cactus-core@workspace:packages/cactus-core":
   version: 0.0.0-use.local
   resolution: "@hyperledger/cactus-core@workspace:packages/cactus-core"
   dependencies:
@@ -8726,7 +8734,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@hyperledger/cactus-plugin-keychain-memory@npm:2.1.0, @hyperledger/cactus-plugin-keychain-memory@workspace:packages/cactus-plugin-keychain-memory":
+"@hyperledger/cactus-plugin-keychain-memory@npm:2.1.0, @hyperledger/cactus-plugin-keychain-memory@workspace:^, @hyperledger/cactus-plugin-keychain-memory@workspace:packages/cactus-plugin-keychain-memory":
   version: 0.0.0-use.local
   resolution: "@hyperledger/cactus-plugin-keychain-memory@workspace:packages/cactus-plugin-keychain-memory"
   dependencies:
@@ -8813,7 +8821,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@hyperledger/cactus-plugin-ledger-connector-besu@npm:2.1.0, @hyperledger/cactus-plugin-ledger-connector-besu@workspace:packages/cactus-plugin-ledger-connector-besu":
+"@hyperledger/cactus-plugin-ledger-connector-besu@npm:2.1.0, @hyperledger/cactus-plugin-ledger-connector-besu@workspace:^, @hyperledger/cactus-plugin-ledger-connector-besu@workspace:packages/cactus-plugin-ledger-connector-besu":
   version: 0.0.0-use.local
   resolution: "@hyperledger/cactus-plugin-ledger-connector-besu@workspace:packages/cactus-plugin-ledger-connector-besu"
   dependencies:
@@ -9259,7 +9267,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@hyperledger/cactus-plugin-satp-hermes@npm:2.1.0, @hyperledger/cactus-plugin-satp-hermes@workspace:packages/cactus-plugin-satp-hermes":
+"@hyperledger/cactus-plugin-satp-hermes@npm:2.1.0, @hyperledger/cactus-plugin-satp-hermes@workspace:^, @hyperledger/cactus-plugin-satp-hermes@workspace:packages/cactus-plugin-satp-hermes":
   version: 0.0.0-use.local
   resolution: "@hyperledger/cactus-plugin-satp-hermes@workspace:packages/cactus-plugin-satp-hermes"
   dependencies:
@@ -9584,7 +9592,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@hyperledger/cactus-test-tooling@npm:2.1.0, @hyperledger/cactus-test-tooling@workspace:packages/cactus-test-tooling":
+"@hyperledger/cactus-test-tooling@npm:2.1.0, @hyperledger/cactus-test-tooling@workspace:^, @hyperledger/cactus-test-tooling@workspace:packages/cactus-test-tooling":
   version: 0.0.0-use.local
   resolution: "@hyperledger/cactus-test-tooling@workspace:packages/cactus-test-tooling"
   dependencies:
@@ -17639,6 +17647,17 @@ __metadata:
     "@types/docker-modem": "npm:*"
     "@types/node": "npm:*"
   checksum: 10/e5abbd04c2af0d266aa03a7860eea890577444c1480dd46f9257c743900697e0d121a5342e330300c0cc9fa9894acaf5da3b5bf26dffa5000a2ef1e1e8c8177a
+  languageName: node
+  linkType: hard
+
+"@types/dockerode@npm:^4":
+  version: 4.0.1
+  resolution: "@types/dockerode@npm:4.0.1"
+  dependencies:
+    "@types/docker-modem": "npm:*"
+    "@types/node": "npm:*"
+    "@types/ssh2": "npm:*"
+  checksum: 10/d16b3a69a20fac269b2317a978442a6752dea158729a264511a3812dcb4c756e0ee079b39b61068cee182f268661e27e32aa7a28815262f0e088ffeb9f2f48c5
   languageName: node
   linkType: hard
 
@@ -28057,6 +28076,18 @@ __metadata:
   languageName: node
   linkType: hard
 
+"docker-modem@npm:^5.0.7":
+  version: 5.0.7
+  resolution: "docker-modem@npm:5.0.7"
+  dependencies:
+    debug: "npm:^4.1.1"
+    readable-stream: "npm:^3.5.0"
+    split-ca: "npm:^1.0.1"
+    ssh2: "npm:^1.15.0"
+  checksum: 10/8c0dc9908e10fbc91c35b187fc6a67a0dcbe4b33a2198dfa67cd8304e0f2452325e1639215674d6e441731d0bf27f06339550f6c3767585b877601d2f16e43e2
+  languageName: node
+  linkType: hard
+
 "dockerode@npm:3.3.0":
   version: 3.3.0
   resolution: "dockerode@npm:3.3.0"
@@ -28075,6 +28106,21 @@ __metadata:
     docker-modem: "npm:^3.0.0"
     tar-fs: "npm:~2.0.1"
   checksum: 10/1748e8d96f88fe71bb165a4c05726904937f5863b69eaeb4a3c1bb3bbf66940c7bef13b349ff757dc43664b4367611aab76f35c1ba468f07dcbaba567e6acd88
+  languageName: node
+  linkType: hard
+
+"dockerode@npm:^4.0.10":
+  version: 4.0.10
+  resolution: "dockerode@npm:4.0.10"
+  dependencies:
+    "@balena/dockerignore": "npm:^1.0.2"
+    "@grpc/grpc-js": "npm:^1.11.1"
+    "@grpc/proto-loader": "npm:^0.7.13"
+    docker-modem: "npm:^5.0.7"
+    protobufjs: "npm:^7.3.2"
+    tar-fs: "npm:^2.1.4"
+    uuid: "npm:^10.0.0"
+  checksum: 10/283c418cab04ef36dae7776baf1088d0eca3d47241d7de92af3f70f7a56e26bc4a1c8e36313c6a91681bdace01b2142203a411aed8011d8d83ec2fcbab3f2145
   languageName: node
   linkType: hard
 
@@ -51996,7 +52042,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"ssh2@npm:^1.11.0, ssh2@npm:^1.14.0":
+"ssh2@npm:^1.11.0, ssh2@npm:^1.14.0, ssh2@npm:^1.15.0":
   version: 1.17.0
   resolution: "ssh2@npm:1.17.0"
   dependencies:
@@ -53511,7 +53557,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"tar-fs@npm:^2.0.0, tar-fs@npm:^2.1.1":
+"tar-fs@npm:^2.0.0, tar-fs@npm:^2.1.1, tar-fs@npm:^2.1.4":
   version: 2.1.4
   resolution: "tar-fs@npm:2.1.4"
   dependencies:

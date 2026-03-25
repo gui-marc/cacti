@@ -52,6 +52,13 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@hyperledger/cactus-core": "workspace:^",
+    "@hyperledger/cactus-plugin-keychain-memory": "workspace:^",
+    "@hyperledger/cactus-plugin-ledger-connector-besu": "workspace:^",
+    "@hyperledger/cactus-plugin-satp-hermes": "workspace:^",
+    "@hyperledger/cactus-test-tooling": "workspace:^",
+    "@types/dockerode": "^4",
+    "dockerode": "^4.0.10",
     "eslint": "^10.1.0",
     "eslint-plugin-prettier": "^5.5.5",
     "globals": "^17.4.0",
@@ -60,7 +67,8 @@
     "prettier": "^3.8.1",
     "ts-jest": "^29.4.6",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.57.1"
+    "typescript-eslint": "^8.57.1",
+    "web3-core": "^4.7.1"
   },
   "engines": {
     "node": ">= 20",
