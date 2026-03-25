@@ -7388,7 +7388,9 @@ __metadata:
     ts-jest: "npm:^29.4.6"
     typescript: "npm:^5.9.3"
     typescript-eslint: "npm:^8.57.1"
-    web3-core: "npm:^4.7.1"
+    web3: "npm:1.6.1"
+    web3-core: "npm:1.6.1"
+    web3-utils: "npm:1.6.1"
   languageName: unknown
   linkType: soft
 

@@ -68,7 +68,9 @@
     "ts-jest": "^29.4.6",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.57.1",
-    "web3-core": "^4.7.1"
+    "web3": "1.6.1",
+    "web3-core": "1.6.1",
+    "web3-utils": "1.6.1"
   },
   "engines": {
     "node": ">= 20",

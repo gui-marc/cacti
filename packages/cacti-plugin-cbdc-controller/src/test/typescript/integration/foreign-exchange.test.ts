@@ -1,4 +1,4 @@
-test("Foreign Exchange Integration Test", () => {
+describe("Foreign Exchange Integration Test", () => {
   it("administer should be able to add an FX Provider", async () => {
     expect(true).toBe(false); // TODO: Implement this test case
   });

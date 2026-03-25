@@ -14,7 +14,7 @@ import Docker from "dockerode";
 import { Account } from "web3-core";
 import { randomUUID as uuidv4 } from "node:crypto";
 import { PluginKeychainMemory } from "@hyperledger/cactus-plugin-keychain-memory";
-import SATPTokenContract from "../../solidity/generated/SATPTokenContract.json";
+import SATPTokenContract from "../../solidity/generated/SATPTokenContract.sol/SATPTokenContract.json";
 import { PluginRegistry } from "@hyperledger/cactus-core";
 import {
   EthContractInvocationType as BesuContractInvocationType,
