@@ -52,18 +52,16 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@hyperledger/cactus-core": "workspace:^",
-    "@hyperledger/cactus-plugin-keychain-memory": "workspace:^",
-    "@hyperledger/cactus-plugin-ledger-connector-besu": "workspace:^",
-    "@hyperledger/cactus-plugin-satp-hermes": "workspace:^",
-    "@hyperledger/cactus-test-tooling": "workspace:^",
+    "@types/cors": "^2",
     "@types/dockerode": "^4",
+    "@types/express": "^5",
     "dockerode": "^4.0.10",
     "eslint": "^10.1.0",
     "eslint-plugin-prettier": "^5.5.5",
     "globals": "^17.4.0",
     "jest": "^30.3.0",
     "jest-util": "^30.3.0",
+    "knex": "^3.2.8",
     "prettier": "^3.8.1",
     "ts-jest": "^29.4.6",
     "typescript": "^5.9.3",
@@ -78,6 +76,12 @@
   },
   "dependencies": {
     "@hyperledger/cactus-common": "workspace:^",
-    "@hyperledger/cactus-core-api": "workspace:^"
+    "@hyperledger/cactus-core": "workspace:^",
+    "@hyperledger/cactus-core-api": "workspace:^",
+    "@hyperledger/cactus-plugin-satp-hermes": "workspace:^",
+    "axios": "^1.14.0",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "xmlbuilder2": "^4.0.3"
   }
 }

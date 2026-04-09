@@ -4,6 +4,7 @@ import {
   pruneDockerAllIfGithubAction,
 } from "@hyperledger/cactus-test-tooling";
 import { BesuEnvironment } from "./besu-environment";
+import { pruneDocker } from "../utils";
 
 const LOG_LEVEL = "DEBUG" as LogLevelDesc;
 const TIMEOUT = 1_000_000;
@@ -13,19 +14,9 @@ const LOG = LoggerProvider.getOrCreate({
   label: "besu-environment-test",
 });
 
-async function pruneDocker() {
-  try {
-    await pruneDockerAllIfGithubAction({ logLevel: LOG_LEVEL });
-    LOG.info("Pruning throw OK");
-  } catch (err) {
-    await Containers.logDiagnostics({ logLevel: LOG_LEVEL });
-    fail(`Failed to prune docker containers: ${err}`);
-  }
-}
+beforeAll(async () => pruneDocker(LOG_LEVEL, LOG));
 
-beforeAll(pruneDocker);
-
-afterAll(pruneDocker);
+afterAll(async () => pruneDocker(LOG_LEVEL, LOG));
 
 describe("Besu Dummy Environment", () => {
   jest.setTimeout(TIMEOUT);
@@ -37,6 +28,14 @@ describe("Besu Dummy Environment", () => {
     async () => {
       expect(besuEnv).toBeDefined();
       await besuEnv.init();
+    },
+    TIMEOUT,
+  );
+
+  it(
+    "should deploy Besu contracts and setup environment",
+    async () => {
+      await besuEnv.deployAndSetupContracts();
     },
     TIMEOUT,
   );
