@@ -33,4 +33,12 @@ export class InMemoryTransactionStore extends TransactionStore {
   async delete(transactionId: string): Promise<void> {
     this.transactions.delete(transactionId);
   }
+
+  async getAll(): Promise<ITransaction[]> {
+    return Array.from(this.transactions.values());
+  }
+
+  async reset(): Promise<void> {
+    this.transactions.clear();
+  }
 }

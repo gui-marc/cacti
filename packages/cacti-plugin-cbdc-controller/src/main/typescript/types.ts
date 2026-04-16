@@ -1,21 +1,20 @@
-import { IRequestOptions as SATPIRequestOptions } from "@hyperledger/cactus-plugin-satp-hermes/dist/lib/main/typescript/core/types";
 import {
-  AdminApi,
   TransactionApi,
+  TransactRequestSourceAsset,
 } from "@hyperledger/cactus-plugin-satp-hermes";
 import { LogLevelDesc } from "@hyperledger/cactus-common";
 import CBDCController from "./core/cbdc-controller";
 
 export interface IInfrastructure {
-  satpGateway: {
-    transactionApi: TransactionApi;
-    adminApi: AdminApi;
-  };
   environments: Record<string, ILedgerEnvironment>;
 }
 
 export interface ILedgerEnvironment {
-  getAsset(id: string, amount: number): Promise<string>;
+  getAsset(
+    id: string,
+    amount: number,
+  ): Promise<TransactRequestSourceAsset> | TransactRequestSourceAsset;
+  getTransactionApi(): TransactionApi;
 }
 
 export interface IRequestOptions {
@@ -30,7 +29,8 @@ export interface IInitiateTransactionRequest {
   senderAddress: string;
   receiverAddress: string;
   amount: number;
-  timeToExpire: number;
+  timeToExpire: Date;
+  complianceProviders: string[];
 }
 
 export enum ComplianceResult {
@@ -39,16 +39,19 @@ export enum ComplianceResult {
   MARKED_FOR_REVIEW,
 }
 
-export interface ISetComplianceCheckResultRequest {
+export interface IGetFXRateRequest {
   transactionId: string;
-  result: ComplianceResult;
+  sourceChain: string;
+  destinationChain: string;
+}
+export interface IGetFXRateResponse {
+  transactionId: string;
+  fxRate: number;
 }
 
-export interface ISetExchangeRateRequest {
+export interface IGetComplianceCheckResponse {
   transactionId: string;
-  sourceChainCode: string;
-  destinationChainCode: string;
-  fxRate: number;
+  result: ComplianceResult;
 }
 
 export enum TransactionStatus {
@@ -67,8 +70,9 @@ export interface ITransaction {
   senderAddress: string;
   receiverAddress: string;
   amount: number;
-  timeToExpire: number;
+  timeToExpire: Date;
   status: TransactionStatus;
+  complianceProviders: string[];
   complianceResult?: ComplianceResult;
   fxRate?: number;
 }

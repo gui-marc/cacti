@@ -1,8 +1,4 @@
 import { LoggerProvider, LogLevelDesc } from "@hyperledger/cactus-common";
-import {
-  Containers,
-  pruneDockerAllIfGithubAction,
-} from "@hyperledger/cactus-test-tooling";
 import { BesuEnvironment } from "./besu-environment";
 import { pruneDocker } from "../utils";
 

@@ -11,11 +11,6 @@ import {
 } from "@hyperledger/cactus-core-api";
 
 import express, { type Express } from "express";
-import {
-  AdminApi,
-  Configuration,
-  TransactionApi,
-} from "@hyperledger/cactus-plugin-satp-hermes";
 import { IInfrastructure, ILedgerEnvironment, IRequestOptions } from "./types";
 import { registerWebServiceEndpoint } from "@hyperledger/cactus-core";
 import { InitiateTransactionEndpointV1 } from "./web-services/initiate-transaction-endpoint";
@@ -23,12 +18,9 @@ import CBDCController from "./core/cbdc-controller";
 import { TransactionStore } from "./store/transaction-store";
 import { FXProvidersStore } from "./store/fx-providers-store";
 import { ComplianceProvidersStore } from "./store/compliance-providers-store";
-import { SetComplianceChecksEndpointV1 } from "./web-services/set-compliance-checks-endpoint";
-import { SetExchangeRateEndpointV1 } from "./web-services/set-exchange-rate-endpoint";
 
 export interface IPluginCBDCOptions extends ICactusPluginOptions {
   logLevel?: LogLevelDesc;
-  satpConfig: Configuration;
   environments: Record<string, ILedgerEnvironment>;
   transactionStore: TransactionStore;
   fxProvidersStore: FXProvidersStore;
@@ -59,10 +51,6 @@ export class PluginCBDCController implements ICactusPlugin {
     this.webApplication = express();
 
     this.infrastructure = {
-      satpGateway: {
-        transactionApi: new TransactionApi(this.options.satpConfig),
-        adminApi: new AdminApi(this.options.satpConfig),
-      },
       environments: this.options.environments,
     };
 
@@ -70,6 +58,7 @@ export class PluginCBDCController implements ICactusPlugin {
       this.options.transactionStore,
       this.options.fxProvidersStore,
       this.options.complianceProvidersStore,
+      this.infrastructure,
     );
   }
 
@@ -87,6 +76,8 @@ export class PluginCBDCController implements ICactusPlugin {
   }
 
   private async createWebServices() {
+    this.log.debug("Creating web services...");
+
     this.webApplication.use(express.json({ limit: "250mb" }));
     this.webApplication.use(cors());
 
@@ -100,14 +91,6 @@ export class PluginCBDCController implements ICactusPlugin {
       registerWebServiceEndpoint(
         this.webApplication,
         new InitiateTransactionEndpointV1(requestOptions),
-      ),
-      registerWebServiceEndpoint(
-        this.webApplication,
-        new SetComplianceChecksEndpointV1(requestOptions),
-      ),
-      registerWebServiceEndpoint(
-        this.webApplication,
-        new SetExchangeRateEndpointV1(requestOptions),
       ),
     ]);
   }

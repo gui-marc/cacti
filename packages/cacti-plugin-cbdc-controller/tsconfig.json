@@ -10,8 +10,9 @@
       "@/*": ["./src/main/typescript/*"],
       "@test/*": ["./src/test/typescript/*"]
     },
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "types": ["jest", "@types/jest"]
   },
-  "include": ["./src/**/*.{ts,json,sol}"],
+  "include": ["./**/*.{ts,json,sol}"],
   "references": []
 }

@@ -1,0 +1,103 @@
+{
+  "gid": {
+    "id": "BesuGateway",
+    "name": "CustomGateway",
+    "version": [
+      {
+        "Core": "v02",
+        "Architecture": "v02",
+        "Crash": "v02"
+      }
+    ],
+    "connectedDLTs": [
+      {
+        "id": "BesuLedgerCBDCNetwork",
+        "ledgerType": "BESU_2X"
+      }
+    ],
+    "proofID": "mockProofID11",
+    "address": "http://besu-gateway.satp-hermes",
+    "gatewayClientPort": 3011,
+    "gatewayServerPort": 3010,
+    "gatewayOapiPort": 4010,
+    "pubKey": "02b339b20921f53a2a36eb427849dc2f50fb8ef620860508d05404541da73798ac"
+  },
+  "logLevel": "DEBUG",
+  "counterPartyGateways": [
+    {
+      "id": "BesuGateway",
+      "name": "CustomGateway",
+      "version": [
+        {
+          "Core": "v02",
+          "Architecture": "v02",
+          "Crash": "v02"
+        }
+      ],
+      "connectedDLTs": [
+        {
+          "id": "BesuLedgerCBDCNetwork",
+          "ledgerType": "BESU_2X"
+        }
+      ],
+      "proofID": "mockProofID11",
+      "address": "http://besu-gateway.satp-hermes",
+      "gatewayClientPort": 3011,
+      "gatewayServerPort": 3010,
+      "gatewayOapiPort": 4010,
+      "pubKey": "02b339b20921f53a2a36eb427849dc2f50fb8ef620860508d05404541da73798ac"
+    }
+  ],
+  "localRepository": {
+    "client": "pg",
+    "connection": {
+      "host": "172.18.0.3",
+      "user": "user123123",
+      "password": "password",
+      "database": "my_database",
+      "port": 5432,
+      "ssl": false
+    }
+  },
+  "remoteRepository": {
+    "client": "pg",
+    "connection": {
+      "host": "172.18.0.4",
+      "user": "user123123",
+      "password": "password",
+      "database": "my_database",
+      "port": 5432,
+      "ssl": false
+    }
+  },
+  "environment": "production",
+  "ccConfig": {
+    "bridgeConfig": [
+      {
+        "networkIdentification": {
+          "id": "BesuLedgerCBDCNetwork",
+          "ledgerType": "BESU_2X"
+        },
+        "signingCredential": {
+          "ethAccount": "0xc6aE1b5d8279B9dB13C758780c9b885261F77c77",
+          "secret": "0x024f9291e05c4c2361942bcf4aa75acc127bf600faa006cd61fde25aa00dae32",
+          "type": "PRIVATE_KEY_HEX"
+        },
+        "gas": 9999999999,
+        "connectorOptions": {
+          "rpcApiHttpHost": "http://172.18.0.2:8545",
+          "rpcApiWsHost": "ws://172.18.0.2:8546"
+        },
+        "claimFormats": [
+          1
+        ]
+      }
+    ]
+  },
+  "enableCrashRecovery": false,
+  "keyPair": {
+    "publicKey": "02b339b20921f53a2a36eb427849dc2f50fb8ef620860508d05404541da73798ac",
+    "privateKey": "ff0ebc80c995c2fc4aabb42b69fc22804c334307f087c4410a8dff619e6f0959"
+  },
+  "ontologyPath": "/opt/cacti/satp-hermes/ontologies"
+}

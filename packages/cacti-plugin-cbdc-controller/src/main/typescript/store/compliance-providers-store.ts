@@ -2,6 +2,7 @@ import { IComplianceProvider } from "../types";
 
 export abstract class ComplianceProvidersStore {
   abstract getAll(): Promise<IComplianceProvider[]>;
+  abstract getByIds(providerIds: string[]): Promise<IComplianceProvider[]>;
   abstract save(provider: IComplianceProvider): Promise<void>;
   abstract get(providerId: string): Promise<IComplianceProvider | null>;
   abstract update(
@@ -31,6 +32,12 @@ export class InMemoryComplianceProvidersStore extends ComplianceProvidersStore {
     return Array.from(this.providers.values());
   }
 
+  async getByIds(providerIds: string[]): Promise<IComplianceProvider[]> {
+    return providerIds
+      .map((id) => this.providers.get(id))
+      .filter((p) => p !== undefined) as IComplianceProvider[];
+  }
+
   async update(providerId: string, update: IComplianceProvider): Promise<void> {
     if (!this.providers.has(providerId)) {
       throw new Error(`Compliance provider with id ${providerId} not found`);
@@ -40,5 +47,9 @@ export class InMemoryComplianceProvidersStore extends ComplianceProvidersStore {
 
   async delete(providerId: string): Promise<void> {
     this.providers.delete(providerId);
+  }
+
+  async reset(): Promise<void> {
+    this.providers.clear();
   }
 }

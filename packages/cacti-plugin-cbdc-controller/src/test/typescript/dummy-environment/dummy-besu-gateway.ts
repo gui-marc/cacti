@@ -3,24 +3,41 @@ import {
   Logger,
   LoggerProvider,
   LogLevelDesc,
+  Secp256k1Keys,
 } from "@hyperledger/cactus-common";
 import { BesuEnvironment } from "./besu-environment";
 
 import { Knex } from "knex";
 import { Container } from "dockerode";
-import { SATPGatewayRunner } from "@hyperledger/cactus-test-tooling";
+import {
+  ISATPGatewayRunnerConstructorOptions,
+  SATPGatewayRunner,
+} from "@hyperledger/cactus-test-tooling";
 import {
   AdminApi,
+  Configuration,
+  DEFAULT_PORT_GATEWAY_CLIENT,
+  DEFAULT_PORT_GATEWAY_OAPI,
+  DEFAULT_PORT_GATEWAY_SERVER,
+  GatewayIdentity,
+  GetApproveAddressApi,
+  SATPGatewayConfig,
+  TokenType,
   TransactionApi,
+  TransactRequestSourceAsset,
 } from "@hyperledger/cactus-plugin-satp-hermes";
 
 import Docker from "dockerode";
+import { ILedgerEnvironment } from "../../../main/typescript/types";
+import { LedgerType } from "@hyperledger/cactus-core-api";
+import { setupGatewayDockerFiles } from "../utils";
+import { createPGDatabase, setupDBTable } from "./db-infrastructure";
 
-interface IDumyBesuGatewayOptions {
+interface IDummyBesuGatewayOptions {
   logLevel: LogLevelDesc;
 }
 
-export class DummyBesuGateway {
+export class DummyBesuGateway implements ILedgerEnvironment {
   public static readonly CLASS_NAME = "CbdcBridgingAppDummyInfrastructure";
 
   private static readonly networkName = "CDBC_Network";
@@ -46,7 +63,7 @@ export class DummyBesuGateway {
   private transactionApi?: TransactionApi;
   private adminApi?: AdminApi;
 
-  constructor(public readonly options: IDumyBesuGatewayOptions) {
+  constructor(public readonly options: IDummyBesuGatewayOptions) {
     const fnTag = `${DummyBesuGateway.CLASS_NAME}#constructor()`;
     Checks.truthy(options, `${fnTag} arg options`);
 
@@ -85,5 +102,171 @@ export class DummyBesuGateway {
     await this.besuEnvironment.init();
     this.log.info(`Deploying Besu contracts and setting up environment...`);
     await this.besuEnvironment.deployAndSetupContracts();
+
+    await this.createDBs();
+    await this.createSATPGateway();
+  }
+
+  public async stop() {
+    await this.runner?.stop();
+    await this.runner?.destroy();
+
+    await this.dbLocal?.stop();
+    await this.dbRemote?.stop();
+    await this.dbLocal?.remove();
+    await this.dbRemote?.remove();
+
+    await this.besuEnvironment.tearDown();
+  }
+
+  private async createDBs() {
+    this.log.info(`Creating local Postgres database...`);
+    ({ config: this.dbLocalConfig, container: this.dbLocal } =
+      await createPGDatabase({
+        network: DummyBesuGateway.networkName,
+        postgresUser: "user123123",
+        postgresPassword: "password",
+      }));
+    this.log.info(`Creating remote Postgres database...`);
+    ({ config: this.dbRemoteConfig, container: this.dbRemote } =
+      await createPGDatabase({
+        network: DummyBesuGateway.networkName,
+        postgresUser: "user123123",
+        postgresPassword: "password",
+      }));
+
+    this.log.info("Setting up database tables...");
+    await setupDBTable(this.dbRemoteConfig);
+  }
+
+  private async createSATPGateway() {
+    this.log.info(`Creating SATP Gateway...`);
+
+    const gatewayKeyPair = Secp256k1Keys.generateKeyPairsBuffer();
+
+    const gatewayIdentity = {
+      id: "BesuGateway",
+      name: "CustomGateway",
+      version: [
+        {
+          Core: "v02",
+          Architecture: "v02",
+          Crash: "v02",
+        },
+      ],
+      connectedDLTs: [
+        {
+          id: BesuEnvironment.BESU_NETWORK_ID,
+          ledgerType: LedgerType.Besu2X,
+        },
+      ],
+      proofID: "mockProofID11",
+      address: `http://${this.address}`,
+      gatewayClientPort: DEFAULT_PORT_GATEWAY_CLIENT,
+      gatewayServerPort: DEFAULT_PORT_GATEWAY_SERVER,
+      gatewayOapiPort: DEFAULT_PORT_GATEWAY_OAPI,
+      pubKey: Buffer.from(gatewayKeyPair.publicKey).toString("hex"),
+    } as GatewayIdentity;
+
+    const besuConfig = await this.besuEnvironment.createBesuDockerConfig();
+
+    const gatewayOptions = {
+      gid: gatewayIdentity,
+      logLevel: this.logLevel,
+      counterPartyGateways: [gatewayIdentity],
+      localRepository: this.dbLocalConfig
+        ? ({
+            client: this.dbLocalConfig.client,
+            connection: this.dbLocalConfig.connection,
+          } satisfies Knex.Config)
+        : undefined,
+      remoteRepository: this.dbRemoteConfig
+        ? ({
+            client: this.dbRemoteConfig.client,
+            connection: this.dbRemoteConfig.connection,
+          } satisfies Knex.Config)
+        : undefined,
+      environment: "production",
+      ccConfig: {
+        bridgeConfig: [besuConfig],
+      },
+      enableCrashRecovery: false,
+      keyPair: {
+        publicKey: Buffer.from(gatewayKeyPair.publicKey).toString("hex"),
+        privateKey: gatewayKeyPair.privateKey.toString("hex"),
+      },
+      ontologyPath: "/opt/cacti/satp-hermes/ontologies",
+    } as Partial<SATPGatewayConfig>;
+
+    const gatewayDockerFiles = setupGatewayDockerFiles(gatewayOptions);
+
+    const gatewayRunnerOptions: ISATPGatewayRunnerConstructorOptions = {
+      containerImageVersion: DummyBesuGateway.DOCKER_IMAGE_VERSION,
+      containerImageName: DummyBesuGateway.DOCKER_IMAGE_NAME,
+      serverPort: DEFAULT_PORT_GATEWAY_SERVER,
+      clientPort: DEFAULT_PORT_GATEWAY_CLIENT,
+      oapiPort: DEFAULT_PORT_GATEWAY_OAPI,
+      logLevel: this.logLevel,
+      emitContainerLogs: true,
+      configPath: gatewayDockerFiles.configPath,
+      logsPath: gatewayDockerFiles.logsPath,
+      ontologiesPath: gatewayDockerFiles.ontologiesPath,
+      networkName: DummyBesuGateway.networkName,
+      url: this.address,
+    };
+
+    this.runner = new SATPGatewayRunner(gatewayRunnerOptions);
+    this.log.debug("Starting Gateway Runner...");
+    await this.runner.start();
+    this.log.debug("Gateway Runner started");
+
+    const approveAddressApi = new GetApproveAddressApi(
+      new Configuration({
+        basePath: `http://${await this.runner.getOApiHost()}`,
+      }),
+    );
+
+    const reqApproveAddress = await approveAddressApi.getApproveAddress(
+      {
+        id: BesuEnvironment.BESU_NETWORK_ID,
+        ledgerType: LedgerType.Besu2X,
+      },
+      TokenType.Fungible,
+    );
+
+    if (!reqApproveAddress?.data.approveAddress) {
+      throw new Error("Failed to get approve address");
+    }
+
+    this.approveAddress = reqApproveAddress.data.approveAddress;
+
+    this.besuEnvironment.setApproveAddress(this.approveAddress);
+
+    await this.besuEnvironment.giveRoleToBridge(this.approveAddress);
+
+    this.transactionApi = new TransactionApi(
+      new Configuration({
+        basePath: `http://${await this.runner.getOApiHost()}`,
+      }),
+    );
+
+    this.adminApi = new AdminApi(
+      new Configuration({
+        basePath: `http://${await this.runner.getOApiHost()}`,
+      }),
+    );
+
+    this.log.info(`SATP Gateway created and initialized`);
+  }
+
+  getAsset(
+    id: string,
+    amount: number,
+  ): Promise<TransactRequestSourceAsset> | TransactRequestSourceAsset {
+    return this.besuEnvironment.getBesuAsset(id, amount.toString());
+  }
+
+  getTransactionApi(): TransactionApi {
+    return this.transactionApi!;
   }
 }

@@ -45,15 +45,17 @@ export class InMemoryFXProvidersStore extends FXProvidersStore {
     const result: IFXProvider[] = [];
     for (const provider of this.providers.values()) {
       if (
-        provider.supportedChainPairs.some(
-          (pair) =>
-            pair.sourceChain === sourceChain &&
-            pair.destinationChain === destinationChain,
+        provider.supportedChains.some(
+          (chain) => chain === sourceChain || chain === destinationChain,
         )
       ) {
         result.push(provider);
       }
     }
     return result;
+  }
+
+  async reset(): Promise<void> {
+    this.providers.clear();
   }
 }

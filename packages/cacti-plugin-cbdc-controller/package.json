@@ -52,9 +52,14 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@hyperledger/cactus-plugin-keychain-memory": "workspace:^",
+    "@hyperledger/cactus-plugin-ledger-connector-besu": "workspace:^",
+    "@hyperledger/cactus-test-tooling": "workspace:^",
     "@types/cors": "^2",
     "@types/dockerode": "^4",
     "@types/express": "^5",
+    "@types/jest": "^30.0.0",
+    "@types/pg": "^8",
     "dockerode": "^4.0.10",
     "eslint": "^10.1.0",
     "eslint-plugin-prettier": "^5.5.5",
@@ -64,6 +69,7 @@
     "knex": "^3.2.8",
     "prettier": "^3.8.1",
     "ts-jest": "^29.4.6",
+    "ts-results": "^3.3.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.57.1",
     "web3": "1.6.1",
@@ -82,6 +88,7 @@
     "axios": "^1.14.0",
     "cors": "^2.8.6",
     "express": "^5.2.1",
+    "pg": "^8.20.0",
     "xmlbuilder2": "^4.0.3"
   }
 }

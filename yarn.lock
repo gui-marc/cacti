@@ -7373,10 +7373,15 @@ __metadata:
     "@hyperledger/cactus-common": "workspace:^"
     "@hyperledger/cactus-core": "workspace:^"
     "@hyperledger/cactus-core-api": "workspace:^"
+    "@hyperledger/cactus-plugin-keychain-memory": "workspace:^"
+    "@hyperledger/cactus-plugin-ledger-connector-besu": "workspace:^"
     "@hyperledger/cactus-plugin-satp-hermes": "workspace:^"
+    "@hyperledger/cactus-test-tooling": "workspace:^"
     "@types/cors": "npm:^2"
     "@types/dockerode": "npm:^4"
     "@types/express": "npm:^5"
+    "@types/jest": "npm:^30.0.0"
+    "@types/pg": "npm:^8"
     axios: "npm:^1.14.0"
     cors: "npm:^2.8.6"
     dockerode: "npm:^4.0.10"
@@ -7387,8 +7392,10 @@ __metadata:
     jest: "npm:^30.3.0"
     jest-util: "npm:^30.3.0"
     knex: "npm:^3.2.8"
+    pg: "npm:^8.20.0"
     prettier: "npm:^3.8.1"
     ts-jest: "npm:^29.4.6"
+    ts-results: "npm:^3.3.0"
     typescript: "npm:^5.9.3"
     typescript-eslint: "npm:^8.57.1"
     web3: "npm:1.6.1"
@@ -8740,7 +8747,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@hyperledger/cactus-plugin-keychain-memory@npm:2.1.0, @hyperledger/cactus-plugin-keychain-memory@workspace:packages/cactus-plugin-keychain-memory":
+"@hyperledger/cactus-plugin-keychain-memory@npm:2.1.0, @hyperledger/cactus-plugin-keychain-memory@workspace:^, @hyperledger/cactus-plugin-keychain-memory@workspace:packages/cactus-plugin-keychain-memory":
   version: 0.0.0-use.local
   resolution: "@hyperledger/cactus-plugin-keychain-memory@workspace:packages/cactus-plugin-keychain-memory"
   dependencies:
@@ -8827,7 +8834,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@hyperledger/cactus-plugin-ledger-connector-besu@npm:2.1.0, @hyperledger/cactus-plugin-ledger-connector-besu@workspace:packages/cactus-plugin-ledger-connector-besu":
+"@hyperledger/cactus-plugin-ledger-connector-besu@npm:2.1.0, @hyperledger/cactus-plugin-ledger-connector-besu@workspace:^, @hyperledger/cactus-plugin-ledger-connector-besu@workspace:packages/cactus-plugin-ledger-connector-besu":
   version: 0.0.0-use.local
   resolution: "@hyperledger/cactus-plugin-ledger-connector-besu@workspace:packages/cactus-plugin-ledger-connector-besu"
   dependencies:
@@ -9598,7 +9605,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@hyperledger/cactus-test-tooling@npm:2.1.0, @hyperledger/cactus-test-tooling@workspace:packages/cactus-test-tooling":
+"@hyperledger/cactus-test-tooling@npm:2.1.0, @hyperledger/cactus-test-tooling@workspace:^, @hyperledger/cactus-test-tooling@workspace:packages/cactus-test-tooling":
   version: 0.0.0-use.local
   resolution: "@hyperledger/cactus-test-tooling@workspace:packages/cactus-test-tooling"
   dependencies:
@@ -18089,7 +18096,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/jest@npm:*":
+"@types/jest@npm:*, @types/jest@npm:^30.0.0":
   version: 30.0.0
   resolution: "@types/jest@npm:30.0.0"
   dependencies:
@@ -18649,6 +18656,17 @@ __metadata:
     pg-protocol: "npm:*"
     pg-types: "npm:^2.2.0"
   checksum: 10/a64da7168842bb4c907cceb9ed1253ddc69d4caf5e6f01c79b453c22187cb6488f356bec287a9f1a6c67729fd1c3532632bb439fa7618feb026149c70fdfb4d5
+  languageName: node
+  linkType: hard
+
+"@types/pg@npm:^8":
+  version: 8.20.0
+  resolution: "@types/pg@npm:8.20.0"
+  dependencies:
+    "@types/node": "npm:*"
+    pg-protocol: "npm:*"
+    pg-types: "npm:^2.2.0"
+  checksum: 10/3fb5be6e02de5c1a519acfbcb73647864e0d118bd09d0dea9b02091992095094e1ba150454c1175fd0127a596947e7216e15ff9b6162cd7792b62effce6aa751
   languageName: node
   linkType: hard
 
@@ -45787,7 +45805,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"pg-cloudflare@npm:^1.1.1, pg-cloudflare@npm:^1.2.5":
+"pg-cloudflare@npm:^1.1.1, pg-cloudflare@npm:^1.2.5, pg-cloudflare@npm:^1.3.0":
   version: 1.3.0
   resolution: "pg-cloudflare@npm:1.3.0"
   checksum: 10/04007ebbd314bdc8e5983d5d0f71a942f1915d2312ed84894d55475010559665bcbb9941d55523d36be6386cd83490dffb5b1ea98ffbbc82a140ef5dfb68ab8d
@@ -45805,6 +45823,13 @@ __metadata:
   version: 2.6.2
   resolution: "pg-connection-string@npm:2.6.2"
   checksum: 10/22265882c3b6f2320785378d0760b051294a684989163d5a1cde4009e64e84448d7bf67d9a7b9e7f69440c3ee9e2212f9aa10dd17ad6773f6143c6020cebbcb5
+  languageName: node
+  linkType: hard
+
+"pg-connection-string@npm:^2.12.0":
+  version: 2.12.0
+  resolution: "pg-connection-string@npm:2.12.0"
+  checksum: 10/03e5462c1f4da57166344a9eae105f95af6887a501dfe4ca2feb85ca8d351162afe9fc581cb27d44ecdaecc59a8bd55a1ec35b66714b01a9db148f0a91c0b36c
   languageName: node
   linkType: hard
 
@@ -45829,6 +45854,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"pg-pool@npm:^3.13.0":
+  version: 3.13.0
+  resolution: "pg-pool@npm:3.13.0"
+  peerDependencies:
+    pg: ">=8.0"
+  checksum: 10/0addd11b3f3f49fb1d16bf181583411e8a9809730dbfc5edb9bbf5110bc02beb4ac346c52a121f446ff76bcd420a76a3409952ea743aa5f6a04705ea953bd8aa
+  languageName: node
+  linkType: hard
+
 "pg-pool@npm:^3.5.2, pg-pool@npm:^3.7.0, pg-pool@npm:^3.9.6":
   version: 3.11.0
   resolution: "pg-pool@npm:3.11.0"
@@ -45845,7 +45879,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"pg-types@npm:^2.1.0, pg-types@npm:^2.2.0":
+"pg-protocol@npm:^1.13.0":
+  version: 1.13.0
+  resolution: "pg-protocol@npm:1.13.0"
+  checksum: 10/302cd3920df00f178519693557c34949d64c8b3af7e2c12772b14f61547b947e4c761b4ca2319dbba5b0906207bb1b535cbfc7006d40d47fd823e277c2690a71
+  languageName: node
+  linkType: hard
+
+"pg-types@npm:2.2.0, pg-types@npm:^2.1.0, pg-types@npm:^2.2.0":
   version: 2.2.0
   resolution: "pg-types@npm:2.2.0"
   dependencies:
@@ -45937,7 +45978,29 @@ __metadata:
   languageName: node
   linkType: hard
 
-"pgpass@npm:1.x":
+"pg@npm:^8.20.0":
+  version: 8.20.0
+  resolution: "pg@npm:8.20.0"
+  dependencies:
+    pg-cloudflare: "npm:^1.3.0"
+    pg-connection-string: "npm:^2.12.0"
+    pg-pool: "npm:^3.13.0"
+    pg-protocol: "npm:^1.13.0"
+    pg-types: "npm:2.2.0"
+    pgpass: "npm:1.0.5"
+  peerDependencies:
+    pg-native: ">=3.0.1"
+  dependenciesMeta:
+    pg-cloudflare:
+      optional: true
+  peerDependenciesMeta:
+    pg-native:
+      optional: true
+  checksum: 10/a30b99c799eddbd4f7f98bef906fe25e17c17d7d8918bc7545108947388df0d9c490858b04dabd37ce0063f40b1e58987b0079f99d5a661fb66f40c17f172bfc
+  languageName: node
+  linkType: hard
+
+"pgpass@npm:1.0.5, pgpass@npm:1.x":
   version: 1.0.5
   resolution: "pgpass@npm:1.0.5"
   dependencies:
@@ -54796,7 +54859,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"ts-results@npm:3.3.0":
+"ts-results@npm:3.3.0, ts-results@npm:^3.3.0":
   version: 3.3.0
   resolution: "ts-results@npm:3.3.0"
   checksum: 10/127371a096d0ec0d31ee813ae7e160fb7c4e2535c063a154e969389f746a319cf9612f21402aaa2a563cd0d8b6aee8604e955c0d2971b1803979e6f5300e98ea
