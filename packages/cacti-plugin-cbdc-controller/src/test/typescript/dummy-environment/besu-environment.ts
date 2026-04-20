@@ -3,86 +3,129 @@ import {
   LoggerProvider,
   LogLevelDesc,
 } from "@hyperledger/cactus-common";
-import {
-  INetworkOptions,
-  NetworkIdLedgerTypeEnum,
-  TokenType,
-  TransactRequestSourceAsset,
-} from "@hyperledger/cactus-plugin-satp-hermes";
 import { BesuTestLedger } from "@hyperledger/cactus-test-tooling";
-import Docker from "dockerode";
-import { Account } from "web3-core";
-import { randomUUID as uuidv4 } from "node:crypto";
-import { PluginKeychainMemory } from "@hyperledger/cactus-plugin-keychain-memory";
-import SATPTokenContract from "../../solidity/generated/SATPTokenContract.sol/SATPTokenContract.json";
-import { PluginRegistry } from "@hyperledger/cactus-core";
 import {
   EthContractInvocationType as BesuContractInvocationType,
-  EthContractInvocationType,
+  InvokeContractV1Response,
   IPluginLedgerConnectorBesuOptions,
   PluginLedgerConnectorBesu,
-  Web3SigningCredentialType,
+  ReceiptType,
+  Web3SigningCredential,
   Web3SigningCredentialType as Web3SigningCredentialTypeBesu,
 } from "@hyperledger/cactus-plugin-ledger-connector-besu";
-import { NetworkId, ClaimFormat } from "@hyperledger/cactus-plugin-satp-hermes";
+import SATPTokenContract from "../../solidity/generated/SATPTokenContract.sol/SATPTokenContract.json";
+import SATPNFTokenContract from "../../solidity/generated/SATPNFTokenContract.sol/SATPNFTokenContract.json";
+import Web3 from "web3";
+import { PluginKeychainMemory } from "@hyperledger/cactus-plugin-keychain-memory";
+import { PluginRegistry } from "@hyperledger/cactus-core";
+import { randomUUID as uuidv4 } from "node:crypto";
+import { expect } from "@jest/globals";
+import {
+  Asset,
+  AssetTokenTypeEnum,
+  NetworkId,
+  AssetErcTokenStandardEnum,
+  ClaimFormat,
+  TokenType,
+} from "@hyperledger/cactus-plugin-satp-hermes";
 import { LedgerType } from "@hyperledger/cactus-core-api";
-import CryptoMaterial from "../../json/crypto-material.json";
-import { getUserFromPseudonim } from "../utils";
-import ExampleOntology from "../../json/ontologies/ontology-satp-erc20-interact-besu.json";
-
-export class BesuEnvironment {
-  public static readonly BESU_ASSET_ID: string = "BesuCBDCAsset";
-  public static readonly BESU_NETWORK_ID: string = "BesuLedgerCBDCNetwork";
-  public static readonly SATP_CONTRACT_NAME: string = "CBDCContract";
-  public static readonly BESU_ASSET_REFERENCE_ID: string = ExampleOntology.id;
-
-  private readonly log: Logger;
-
-  private dockerNetwork: string = "besu";
-
-  private ledger!: BesuTestLedger;
-  private connector?: PluginLedgerConnectorBesu;
-  private connectorOptions?: IPluginLedgerConnectorBesuOptions;
-
-  private firstHighNetWorthAccount!: string;
-  private bridgeEthAccount?: Account;
-  public besuKeyPair?: { privateKey: string };
-  public keychainEntryKey?: string;
-  public keychainEntryValue?: string;
-  public assetContractAddress?: string;
-
-  public keychainPlugin1!: PluginKeychainMemory;
-  public keychainPlugin2!: PluginKeychainMemory;
-
+import { OntologyManager } from "@hyperledger/cactus-plugin-satp-hermes/src/main/typescript/cross-chain-mechanisms/bridge/ontology/ontology-manager";
+import ExampleOntologyERC20 from "../../json/ontologies/ontology-satp-erc20-interact-besu.json";
+import ExampleOntologyERC721 from "../../json/ontologies/ontology-satp-erc721-interact-besu.json";
+import {
+  IBesuNetworkConfig,
+  INetworkOptions,
+} from "@hyperledger/cactus-plugin-satp-hermes";
+import Docker from "dockerode";
+import { BesuGasConfig } from "@hyperledger/cactus-plugin-satp-hermes/src/main/typescript/services/validation/config-validating-functions/bridges-config-validating-functions/validate-besu-config";
+import { IBesuLeafOptions } from "@hyperledger/cactus-plugin-satp-hermes/dist/lib/main/typescript/cross-chain-mechanisms/bridge/bridge-types";
+export interface IBesuTestEnvironment {
+  logLevel: LogLevelDesc;
+  network?: string;
+}
+export enum SupportedContractTypes {
+  FUNGIBLE = "FUNGIBLE",
+  NONFUNGIBLE = "NONFUNGIBLE",
+  WRAPPER = "WRAPPER",
+  ORACLE = "ORACLE",
+}
+export interface tokenContractName {
+  assetType: SupportedContractTypes;
+  contractName: string;
+}
+export class BesuTestEnvironment {
+  public static readonly BESU_ASSET_ID: string = "BesuExampleAsset";
+  public static readonly BESU_ASSET_ID2: string = "BesuExampleAsset2";
+  public static readonly BESU_REFERENCE_ID: Record<TokenType, string> = {
+    [TokenType.Fungible]: ExampleOntologyERC20.id,
+    [TokenType.Nonfungible]: ExampleOntologyERC721.id,
+  };
+  public static readonly BESU_NETWORK_ID: string = "BesuLedgerTestNetwork";
   public readonly network: NetworkId = {
-    id: BesuEnvironment.BESU_NETWORK_ID,
+    id: BesuTestEnvironment.BESU_NETWORK_ID,
     ledgerType: LedgerType.Besu2X,
+  };
+  public ledger!: BesuTestLedger;
+  public connector!: PluginLedgerConnectorBesu;
+  public connectorOptions!: IPluginLedgerConnectorBesuOptions;
+
+  public keychainPluginWrapper!: PluginKeychainMemory;
+  public keychainPluginFungible!: PluginKeychainMemory;
+  public keychainPluginNonFungible!: PluginKeychainMemory;
+
+  public besuKeyPair!: { privateKey: string };
+  public keychainEntryKey!: string;
+  public keychainEntryValue!: string;
+  public web3!: Web3;
+  public firstHighNetWorthAccount!: string;
+  public bridgeEthAccount!: { address: string; privateKey: string };
+  public assigneeEthAccount?: { address: string; privateKey: string };
+
+  public tokenContracts: Map<SupportedContractTypes, string> = new Map<
+    SupportedContractTypes,
+    string
+  >();
+  public tokenContractCodes: Map<SupportedContractTypes, any> = new Map<
+    SupportedContractTypes,
+    any
+  >();
+  public assetContractAddresses: Map<SupportedContractTypes, string> = new Map<
+    SupportedContractTypes,
+    string
+  >();
+
+  public besuConfig!: IBesuNetworkConfig;
+
+  public gasConfig: BesuGasConfig = {
+    gasLimit: "999999999999999",
   };
 
   private dockerContainerIP?: string;
+  private dockerNetwork: string = "besu";
 
-  private approveAddress?: string;
+  private readonly log: Logger;
 
-  private readonly logLevel: LogLevelDesc;
-
-  public constructor(logLevel: LogLevelDesc, network?: string) {
+  private constructor(logLevel: LogLevelDesc, network?: string) {
     if (network) {
       this.dockerNetwork = network;
     }
 
-    this.logLevel = logLevel || "INFO";
-    const label = "BesuEnvironment";
-    this.log = LoggerProvider.getOrCreate({ level: this.logLevel, label });
+    const level = logLevel || "INFO";
+    const label = "BesuTestEnvironment";
+    this.log = LoggerProvider.getOrCreate({ level, label });
   }
 
   // Initializes the Besu ledger, accounts, and connector for testing
-  public async init(): Promise<void> {
+  public async init(
+    logLevel: LogLevelDesc,
+    tokenType: tokenContractName[],
+  ): Promise<void> {
     this.ledger = new BesuTestLedger({
       emitContainerLogs: true,
       envVars: ["BESU_NETWORK=dev"],
-      networkName: this.dockerNetwork,
       containerImageVersion: "v2.2.0-rc.2",
       containerImageName: "ghcr.io/hyperledger-cacti/besu-all-in-one",
+      networkName: this.dockerNetwork,
     });
 
     const docker = new Docker();
@@ -102,39 +145,76 @@ export class BesuEnvironment {
 
     const rpcApiWsHost = await this.ledger.getRpcApiWsHost();
 
+    this.web3 = new Web3(rpcApiHttpHost);
+
     // Accounts setup
     this.firstHighNetWorthAccount = this.ledger.getGenesisAccountPubKey();
     this.bridgeEthAccount = await this.ledger.createEthTestAccount();
+    this.assigneeEthAccount = await this.ledger.createEthTestAccount();
 
     // Besu Key Pair setup
     this.besuKeyPair = { privateKey: this.ledger.getGenesisAccountPrivKey() };
     this.keychainEntryValue = this.besuKeyPair.privateKey;
     this.keychainEntryKey = uuidv4();
 
+    tokenType.forEach((element) => {
+      this.tokenContracts.set(element.assetType, element.contractName);
+      this.log.info(
+        `Listing contract for type ${element.assetType} on Besu Test Environment`,
+      );
+    });
+
     // Keychain Plugins setup
-    this.keychainPlugin1 = new PluginKeychainMemory({
+    this.keychainPluginWrapper = new PluginKeychainMemory({
       instanceId: uuidv4(),
       keychainId: uuidv4(),
       backend: new Map([[this.keychainEntryKey, this.keychainEntryValue]]),
-      logLevel: this.logLevel,
+      logLevel,
     });
 
-    this.keychainPlugin2 = new PluginKeychainMemory({
+    this.keychainPluginFungible = new PluginKeychainMemory({
       instanceId: uuidv4(),
       keychainId: uuidv4(),
       backend: new Map([[this.keychainEntryKey, this.keychainEntryValue]]),
-      logLevel: this.logLevel,
+      logLevel,
     });
 
-    // Smart Contract Configuration
-    this.keychainPlugin1.set(
-      BesuEnvironment.SATP_CONTRACT_NAME,
-      JSON.stringify(SATPTokenContract),
-    );
+    this.keychainPluginNonFungible = new PluginKeychainMemory({
+      instanceId: uuidv4(),
+      keychainId: uuidv4(),
+      backend: new Map([[this.keychainEntryKey, this.keychainEntryValue]]),
+      logLevel,
+    });
+
+    if (this.tokenContracts.has(SupportedContractTypes.FUNGIBLE)) {
+      this.keychainPluginFungible.set(
+        this.tokenContracts.get(SupportedContractTypes.FUNGIBLE) ?? "",
+        JSON.stringify(SATPTokenContract),
+      );
+      this.tokenContractCodes.set(
+        SupportedContractTypes.FUNGIBLE,
+        SATPTokenContract,
+      );
+    }
+
+    if (this.tokenContracts.has(SupportedContractTypes.NONFUNGIBLE)) {
+      this.keychainPluginNonFungible.set(
+        this.tokenContracts.get(SupportedContractTypes.NONFUNGIBLE) ?? "",
+        JSON.stringify(SATPNFTokenContract),
+      );
+      this.tokenContractCodes.set(
+        SupportedContractTypes.NONFUNGIBLE,
+        SATPNFTokenContract,
+      );
+    }
 
     // Plugin Registry setup
     const pluginRegistry = new PluginRegistry({
-      plugins: [this.keychainPlugin1, this.keychainPlugin2],
+      plugins: [
+        this.keychainPluginFungible,
+        this.keychainPluginNonFungible,
+        this.keychainPluginWrapper,
+      ],
     });
 
     // Besu Connector setup
@@ -143,321 +223,571 @@ export class BesuEnvironment {
       rpcApiHttpHost,
       rpcApiWsHost,
       pluginRegistry,
-      logLevel: this.logLevel,
+      logLevel,
     };
 
     this.connector = new PluginLedgerConnectorBesu(this.connectorOptions);
 
-    const accounts = [
-      CryptoMaterial.accounts.userA.ethAddress,
-      CryptoMaterial.accounts.userB.ethAddress,
-      CryptoMaterial.accounts.bridge.ethAddress,
-      this.bridgeEthAccount?.address,
-    ];
-
-    for (const account of accounts) {
-      await this.ledger.sendEthToAccount(account);
-    }
-  }
-
-  // Deploys smart contracts and sets up configurations for testing
-  public async deployAndSetupContracts() {
-    const deployOutSATPTokenContract = await this.connector?.deployContract({
-      keychainId: this.keychainPlugin1.getKeychainId(),
-      contractName: BesuEnvironment.SATP_CONTRACT_NAME,
-      contractAbi: SATPTokenContract.abi,
-      constructorArgs: [this.firstHighNetWorthAccount],
+    await this.connector.transact({
       web3SigningCredential: {
         ethAccount: this.firstHighNetWorthAccount,
-        secret: this.besuKeyPair?.privateKey,
+        secret: this.besuKeyPair.privateKey,
         type: Web3SigningCredentialTypeBesu.PrivateKeyHex,
       },
-      bytecode: SATPTokenContract.bytecode.object,
-      gas: 999999999999999,
-    });
-    if (
-      !deployOutSATPTokenContract ||
-      !deployOutSATPTokenContract.transactionReceipt ||
-      !deployOutSATPTokenContract.transactionReceipt.contractAddress
-    ) {
-      throw new Error("Failed to deploy SATPTokenContract");
-    }
-
-    this.assetContractAddress =
-      deployOutSATPTokenContract?.transactionReceipt.contractAddress ?? "";
-
-    this.log.info("SATPTokenContract Deployed successfully");
-  }
-
-  public setApproveAddress(approveAddress: string) {
-    this.approveAddress = approveAddress;
-  }
-
-  public async mintTokensBesu(user: string, amount: number) {
-    const userEthAddress = this.getEthAddress(user);
-    this.log.debug(
-      `Minting Besu tokens for user: ${userEthAddress}, amount: ${amount}`,
-    );
-
-    try {
-      const response = await this.connector?.invokeContract({
-        contractName: BesuEnvironment.SATP_CONTRACT_NAME,
-        keychainId: this.keychainPlugin1.getKeychainId(),
-        invocationType: EthContractInvocationType.Send,
-        methodName: "mint",
-        params: [userEthAddress, amount],
-        signingCredential: {
-          ethAccount: this.firstHighNetWorthAccount,
-          secret: this.besuKeyPair?.privateKey,
-          type: Web3SigningCredentialTypeBesu.PrivateKeyHex,
-        },
+      consistencyStrategy: {
+        blockConfirmations: 0,
+        receiptType: ReceiptType.NodeTxPoolAck,
+      },
+      transactionConfig: {
+        from: this.firstHighNetWorthAccount,
+        to: this.bridgeEthAccount.address,
+        value: 10e9,
         gas: 1000000,
-      });
-
-      this.log.debug(
-        `Besu - Minting tokens for user: ${user} is ${JSON.stringify(response)}`,
-      );
-    } catch (error) {
-      this.log.error(error);
-      throw new Error("Failed to mint tokens", { cause: error });
-    }
-  }
-
-  public async giveRoleToBridge(wrapperAddress: string): Promise<void> {
-    const giveRoleRes = await this.connector?.invokeContract({
-      contractName: BesuEnvironment.SATP_CONTRACT_NAME,
-      keychainId: this.keychainPlugin1.getKeychainId(),
-      invocationType: BesuContractInvocationType.Send,
-      methodName: "grantBridgeRole",
-      params: [wrapperAddress],
-      signingCredential: {
-        ethAccount: this.firstHighNetWorthAccount,
-        secret: this.besuKeyPair?.privateKey,
-        type: Web3SigningCredentialTypeBesu.PrivateKeyHex,
       },
-      gas: 1000000,
     });
 
-    if (!giveRoleRes || !giveRoleRes.success) {
-      throw new Error("Failed to give BRIDGE_ROLE to Bridge");
-    }
-    this.log.info("BRIDGE_ROLE given to Bridge successfully");
+    const balance = await this.web3.eth.getBalance(
+      this.bridgeEthAccount.address,
+    );
+    expect(balance).toBeTruthy();
+    expect(parseInt(balance.toString(), 10)).toBeGreaterThan(10e9);
+    this.log.info(`Bridge account funded: New Balance: ${balance} wei`);
   }
 
-  public async approveAmount(
-    wrapperAddress: string,
-    amount: string,
-  ): Promise<void> {
-    const responseApprove = await this.connector?.invokeContract({
-      contractName: BesuEnvironment.SATP_CONTRACT_NAME,
-      keychainId: this.keychainPlugin1.getKeychainId(),
-      invocationType: BesuContractInvocationType.Send,
-      methodName: "approve",
-      params: [wrapperAddress, amount],
-      signingCredential: {
-        ethAccount: this.firstHighNetWorthAccount,
-        secret: this.besuKeyPair?.privateKey,
-        type: Web3SigningCredentialTypeBesu.PrivateKeyHex,
+  // Creates and initializes a new BesuTestEnvironment instance
+
+  // Other methods and properties...
+
+  public static async setupTestEnvironment(
+    config: IBesuTestEnvironment,
+    tokenContracts: tokenContractName[],
+  ): Promise<BesuTestEnvironment> {
+    const instance = new BesuTestEnvironment(config.logLevel, config.network);
+    await instance.init(config.logLevel, tokenContracts);
+    return instance;
+  }
+
+  // this is the config to be loaded by the gateway, does not contain the log level because it will use the one in the gateway config
+  public createBesuConfig(): INetworkOptions {
+    return {
+      networkIdentification: this.besuConfig.networkIdentification,
+      signingCredential: this.besuConfig.signingCredential,
+      wrapperContractName: this.besuConfig.wrapperContractName,
+      wrapperContractAddress: this.besuConfig.wrapperContractAddress,
+      gasConfig: this.besuConfig.gasConfig,
+      connectorOptions: {
+        rpcApiHttpHost: this.connectorOptions.rpcApiHttpHost,
+        rpcApiWsHost: this.connectorOptions.rpcApiWsHost,
       },
-      gas: 999999999,
-    });
-    if (!responseApprove || !responseApprove.success) {
-      throw new Error("Failed to approve tokens");
-    }
-    this.log.info("Approved 100 tokens to SATPWrapperContract");
+      claimFormats: this.besuConfig.claimFormats,
+    } as INetworkOptions;
   }
 
   // this is the config to be loaded by the gateway when in a docker, does not contain the log level because it will use the one in the gateway config
   public async createBesuDockerConfig(): Promise<INetworkOptions> {
     return {
-      networkIdentification: this.network,
-      signingCredential: {
-        ethAccount: this.bridgeEthAccount?.address,
-        secret: this.bridgeEthAccount?.privateKey,
-        type: Web3SigningCredentialTypeBesu.PrivateKeyHex,
-      },
-      gas: 9999999999,
+      networkIdentification: this.besuConfig.networkIdentification,
+      signingCredential: this.besuConfig.signingCredential,
+      wrapperContractName: this.besuConfig.wrapperContractName,
+      wrapperContractAddress: this.besuConfig.wrapperContractAddress,
+      gasConfig: this.besuConfig.gasConfig,
       connectorOptions: {
-        rpcApiHttpHost: await this.ledger.getRpcApiHttpHost(false),
-        rpcApiWsHost: await this.ledger.getRpcApiWsHost(false),
+        rpcApiHttpHost: await this.ledger.getRpcApiHttpHost(),
+        rpcApiWsHost: await this.ledger.getRpcApiWsHost(),
       },
-      claimFormats: [ClaimFormat.DEFAULT],
+      claimFormats: this.besuConfig.claimFormats,
     } as INetworkOptions;
   }
 
-  public async getBesuBalance(frontendUser: string) {
-    const userEthAddress = this.getEthAddress(frontendUser);
-    this.log.debug(`Getting BESU balance for user: ${frontendUser}`);
+  // this creates the same config as the bridge manager does
+  public createBesuLeafConfig(
+    ontologyManager: OntologyManager,
+    logLevel?: LogLevelDesc,
+  ): IBesuLeafOptions {
+    return {
+      networkIdentification: this.besuConfig.networkIdentification,
+      signingCredential: this.besuConfig.signingCredential,
+      wrapperContractName: this.besuConfig.wrapperContractName,
+      wrapperContractAddress: this.besuConfig.wrapperContractAddress,
+      gasConfig: this.besuConfig.gasConfig,
+      connectorOptions: {
+        instanceId: this.connectorOptions.instanceId,
+        rpcApiHttpHost: this.connectorOptions.rpcApiHttpHost,
+        rpcApiWsHost: this.connectorOptions.rpcApiWsHost,
+        pluginRegistry: new PluginRegistry({ plugins: [] }),
+        logLevel: logLevel,
+      },
+      claimFormats: this.besuConfig.claimFormats,
+      logLevel: logLevel,
+    };
+  }
 
-    if (this.connector === undefined) {
-      throw new Error("connector is undefined");
+  public getNetworkId(): string {
+    return this.network.id;
+  }
+
+  public getNetworkType(): LedgerType {
+    return this.network.ledgerType;
+  }
+
+  public async deployAndSetupContract(assetType: SupportedContractTypes) {
+    let contractKeyChainId: string;
+    let contractCode: any;
+
+    switch (assetType) {
+      case SupportedContractTypes.FUNGIBLE:
+        contractKeyChainId = this.keychainPluginFungible.getKeychainId();
+        contractCode = this.tokenContractCodes.get(
+          SupportedContractTypes.FUNGIBLE,
+        );
+        break;
+      case SupportedContractTypes.NONFUNGIBLE:
+        contractKeyChainId = this.keychainPluginNonFungible.getKeychainId();
+        contractCode = this.tokenContractCodes.get(
+          SupportedContractTypes.NONFUNGIBLE,
+        );
+        break;
+      default:
+        throw new Error(`Unsupported asset type: ${assetType}`);
     }
 
-    try {
-      const response = await this.connector.invokeContract({
-        contractName: BesuEnvironment.SATP_CONTRACT_NAME,
-        keychainId: this.keychainPlugin1.getKeychainId(),
-        invocationType: EthContractInvocationType.Call,
-        methodName: "balanceOf",
-        params: [userEthAddress],
-        signingCredential: {
-          ethAccount: userEthAddress,
-          secret: this.getEthUserPrKey(frontendUser),
-          type: Web3SigningCredentialType.PrivateKeyHex,
-        },
-        gas: 1000000,
-      });
+    const deployOutSATPTokenContract = await this.connector.deployContract({
+      keychainId: contractKeyChainId,
+      contractName: this.tokenContracts.get(assetType) ?? "",
+      contractAbi: contractCode.abi,
+      constructorArgs: [this.firstHighNetWorthAccount],
+      web3SigningCredential: {
+        ethAccount: this.firstHighNetWorthAccount,
+        secret: this.besuKeyPair.privateKey,
+        type: Web3SigningCredentialTypeBesu.PrivateKeyHex,
+      },
+      bytecode: contractCode.bytecode.object,
+      gas: Number(this.gasConfig.gasLimit),
+    });
+    expect(deployOutSATPTokenContract).toBeTruthy();
+    expect(deployOutSATPTokenContract.transactionReceipt).toBeTruthy();
+    expect(
+      deployOutSATPTokenContract.transactionReceipt.contractAddress,
+    ).toBeTruthy();
 
-      this.log.debug(
-        `BESU - Balance for user: ${frontendUser} is ${JSON.stringify(response)}`,
-      );
-      this.log.debug(
-        `BESU - Balance for user: ${frontendUser} is ${response.callOutput}`,
-      );
-
-      return parseInt(response.callOutput);
-    } catch (error) {
-      this.log.error(
-        `BESU - Error getting balance user: ${frontendUser} with error: ${error}`,
-      );
-      return -1;
+    this.assetContractAddresses.set(
+      assetType,
+      deployOutSATPTokenContract.transactionReceipt.contractAddress ?? "",
+    );
+    if (this.assetContractAddresses.get(assetType) != "") {
+      this.log.info(`SATPTokenContract${assetType} Deployed successfully`);
     }
   }
 
-  public async transferTokensBesu(
-    frontendUserFrom: string,
-    frontendUserTo: string,
-    amount: number,
-  ) {
-    const from = this.getEthAddress(frontendUserFrom);
-    const to = this.getEthAddress(frontendUserTo);
-    this.log.debug(
-      `Transferring Besu tokens from: ${frontendUserFrom} to: ${frontendUserTo}`,
+  // Deploys smart contracts and sets up configurations for testing
+  public async deployAndSetupContracts(claimFormat: ClaimFormat) {
+    if (this.tokenContracts.has(SupportedContractTypes.FUNGIBLE)) {
+      await this.deployAndSetupContract(SupportedContractTypes.FUNGIBLE);
+    }
+    if (this.tokenContracts.has(SupportedContractTypes.NONFUNGIBLE)) {
+      await this.deployAndSetupContract(SupportedContractTypes.NONFUNGIBLE);
+    }
+
+    this.besuConfig = {
+      networkIdentification: this.network,
+      signingCredential: {
+        ethAccount: this.bridgeEthAccount.address,
+        secret: this.bridgeEthAccount.privateKey,
+        type: Web3SigningCredentialTypeBesu.PrivateKeyHex,
+      },
+      leafId: "Testing-event-besu-leaf",
+      connectorOptions: this.connectorOptions,
+      claimFormats: [claimFormat],
+      gasConfig: this.gasConfig,
+    };
+  }
+
+  // Deploys smart contracts and sets up configurations for testing
+  public async deployAndSetupOracleContracts(
+    claimFormat: ClaimFormat,
+    contract_name: string,
+    contract: { abi: any; bytecode: { object: string } },
+  ): Promise<string> {
+    if (this.tokenContracts.has(SupportedContractTypes.ORACLE)) {
+      this.keychainPluginFungible.set(
+        this.tokenContracts.get(SupportedContractTypes.ORACLE) ?? "",
+        JSON.stringify(SATPTokenContract),
+      );
+      this.tokenContractCodes.set(
+        SupportedContractTypes.ORACLE,
+        SATPTokenContract,
+      );
+    }
+
+    const blOracleContract = await this.connector.deployContract({
+      keychainId: this.keychainPluginFungible.getKeychainId(),
+      contractName: contract_name,
+      contractAbi: contract.abi,
+      constructorArgs: [],
+      web3SigningCredential: {
+        ethAccount: this.bridgeEthAccount.address,
+        secret: this.bridgeEthAccount.privateKey,
+        type: Web3SigningCredentialTypeBesu.PrivateKeyHex,
+      },
+      bytecode: contract.bytecode.object,
+      gas: Number(this.gasConfig.gasLimit),
+    });
+    expect(blOracleContract).toBeTruthy();
+    expect(blOracleContract.transactionReceipt).toBeTruthy();
+    expect(blOracleContract.transactionReceipt.contractAddress).toBeTruthy();
+
+    this.assetContractAddresses.set(
+      SupportedContractTypes.FUNGIBLE,
+      blOracleContract.transactionReceipt.contractAddress ?? "",
     );
 
-    if (this.connector === undefined) {
-      throw new Error("connector is undefined");
-    }
+    this.log.info("this.businessLogicContract Deployed successfully");
 
-    try {
-      await this.connector.invokeContract({
-        contractName: BesuEnvironment.SATP_CONTRACT_NAME,
-        keychainId: this.keychainPlugin1.getKeychainId(),
-        invocationType: EthContractInvocationType.Send,
-        methodName: "transfer",
-        params: [to, amount],
-        signingCredential: {
-          ethAccount: from,
-          secret: this.getEthUserPrKey(frontendUserFrom),
-          type: Web3SigningCredentialType.PrivateKeyHex,
-        },
-        gas: 1000000,
-      });
-    } catch (error) {
-      console.error(error);
-      throw new Error("Failed to transfer tokens", { cause: error });
-    }
-  }
-
-  public async approveNTokensBesu(frontendUserFrom: string, amount: number) {
-    const from = this.getEthAddress(frontendUserFrom);
-    this.log.debug(`Approving Besu tokens for user: ${frontendUserFrom}`);
-
-    if (this.connector === undefined) {
-      throw new Error("connector is undefined");
-    }
-
-    try {
-      await this.connector.invokeContract({
-        contractName: BesuEnvironment.SATP_CONTRACT_NAME,
-        keychainId: this.keychainPlugin1.getKeychainId(),
-        invocationType: EthContractInvocationType.Send,
-        methodName: "approve",
-        params: [this.approveAddress, amount],
-        signingCredential: {
-          ethAccount: from,
-          secret: this.getEthUserPrKey(frontendUserFrom),
-          type: Web3SigningCredentialType.PrivateKeyHex,
-        },
-        gas: 1000000,
-      });
-    } catch (error) {
-      this.log.error(error);
-      return -1;
-    }
-  }
-
-  public async getAmountApprovedBesu(frontendUser: string) {
-    const from = this.getEthAddress(frontendUser);
-    this.log.debug(`Getting approved balance for user: ${frontendUser}`);
-
-    if (this.connector === undefined) {
-      throw new Error("connector is undefined");
-    }
-
-    try {
-      const response = await this.connector?.invokeContract({
-        contractName: BesuEnvironment.SATP_CONTRACT_NAME,
-        keychainId: this.keychainPlugin1.getKeychainId(),
-        invocationType: EthContractInvocationType.Call,
-        methodName: "allowance",
-        params: [from, this.approveAddress],
-        signingCredential: {
-          ethAccount: from,
-          secret: this.getEthUserPrKey(frontendUser),
-          type: Web3SigningCredentialType.PrivateKeyHex,
-        },
-        gas: 1000000,
-      });
-      return response.callOutput;
-    } catch (error) {
-      this.log.error(
-        `Besu - Error getting approved balance user: ${frontendUser}, error: ${error}`,
-      );
-      return "0";
-    }
-  }
-
-  public getBesuAsset(owner: string, amount: string) {
-    return {
-      owner: owner,
-      contractName: BesuEnvironment.SATP_CONTRACT_NAME,
-      contractAddress: this.assetContractAddress,
-      id: BesuEnvironment.BESU_ASSET_ID,
-      referenceId: BesuEnvironment.BESU_ASSET_REFERENCE_ID,
-      amount,
-      tokenType: TokenType.Fungible,
-      networkId: {
-        id: BesuEnvironment.BESU_NETWORK_ID,
-        ledgerType: NetworkIdLedgerTypeEnum.Besu2X,
+    this.besuConfig = {
+      networkIdentification: this.network,
+      signingCredential: {
+        ethAccount: this.bridgeEthAccount.address,
+        secret: this.bridgeEthAccount.privateKey,
+        type: Web3SigningCredentialTypeBesu.PrivateKeyHex,
       },
-    } as TransactRequestSourceAsset;
+      leafId: "Testing-event-besu-leaf",
+      connectorOptions: this.connectorOptions,
+      claimFormats: [claimFormat],
+      gasConfig: this.gasConfig,
+    };
+
+    return blOracleContract.transactionReceipt.contractAddress!;
   }
 
-  public getEthAddress(user: string) {
-    switch (getUserFromPseudonim(user)) {
-      case "userA":
-        return CryptoMaterial.accounts["userA"].ethAddress;
-      case "userB":
-        return CryptoMaterial.accounts["userB"].ethAddress;
-      case "bridge":
-        return CryptoMaterial.accounts["bridge"].ethAddress;
+  public async mintTokens(
+    assetAttribute: string,
+    newTokenType: TokenType,
+  ): Promise<void> {
+    let inUseContractName: string;
+    let inUseTokenAttribute: string;
+    let inUseContractKeyChainId: string;
+    switch (newTokenType) {
+      case TokenType.Fungible:
+        inUseContractName =
+          this.tokenContracts.get(SupportedContractTypes.FUNGIBLE) ?? "";
+        inUseTokenAttribute = "amount";
+        inUseContractKeyChainId = this.keychainPluginFungible.getKeychainId();
+        break;
+      case TokenType.Nonfungible:
+        inUseContractName =
+          this.tokenContracts.get(SupportedContractTypes.NONFUNGIBLE) ?? "";
+        inUseTokenAttribute = "tokenId";
+        inUseContractKeyChainId =
+          this.keychainPluginNonFungible.getKeychainId();
+        break;
       default:
-        throw new Error("User not found");
+        throw new Error(`Unsupported token type for minting: ${newTokenType}`);
+    }
+    const responseMint = await this.connector.invokeContract({
+      contractName: inUseContractName,
+      keychainId: inUseContractKeyChainId,
+      invocationType: BesuContractInvocationType.Send,
+      methodName: "mint",
+      params: [this.firstHighNetWorthAccount, assetAttribute],
+      signingCredential: {
+        ethAccount: this.firstHighNetWorthAccount,
+        secret: this.besuKeyPair.privateKey,
+        type: Web3SigningCredentialTypeBesu.PrivateKeyHex,
+      },
+      gas: Number(this.besuConfig.gasConfig?.gasLimit),
+    });
+    expect(responseMint).toBeTruthy();
+    expect(responseMint.success).toBeTruthy();
+    this.log.info(
+      `Minted ${inUseTokenAttribute} ${assetAttribute} to firstHighNetWorthAccount`,
+    );
+  }
+
+  public async giveRoleToBridge(wrapperAddress: string): Promise<void> {
+    if (this.tokenContracts.has(SupportedContractTypes.FUNGIBLE)) {
+      const giveRoleRes = await this.connector.invokeContract({
+        contractName:
+          this.tokenContracts.get(SupportedContractTypes.FUNGIBLE) ?? "",
+        keychainId: this.keychainPluginFungible.getKeychainId(),
+        invocationType: BesuContractInvocationType.Send,
+        methodName: "grantBridgeRole",
+        params: [wrapperAddress],
+        signingCredential: {
+          ethAccount: this.firstHighNetWorthAccount,
+          secret: this.besuKeyPair.privateKey,
+          type: Web3SigningCredentialTypeBesu.PrivateKeyHex,
+        },
+        gas: 1000000,
+      });
+
+      expect(giveRoleRes).toBeTruthy();
+      expect(giveRoleRes.success).toBeTruthy();
+      this.log.info(
+        "BRIDGE_ROLE given over Fungible Token to SATPWrapperContract successfully",
+      );
+    }
+    if (this.tokenContracts.has(SupportedContractTypes.NONFUNGIBLE)) {
+      const giveRoleRes = await this.connector.invokeContract({
+        contractName:
+          this.tokenContracts.get(SupportedContractTypes.NONFUNGIBLE) ?? "",
+        keychainId: this.keychainPluginNonFungible.getKeychainId(),
+        invocationType: BesuContractInvocationType.Send,
+        methodName: "grantBridgeRole",
+        params: [wrapperAddress],
+        signingCredential: {
+          ethAccount: this.firstHighNetWorthAccount,
+          secret: this.besuKeyPair.privateKey,
+          type: Web3SigningCredentialTypeBesu.PrivateKeyHex,
+        },
+        gas: 1000000,
+      });
+
+      expect(giveRoleRes).toBeTruthy();
+      expect(giveRoleRes.success).toBeTruthy();
+      this.log.info(
+        "BRIDGE_ROLE given over Non Fungible Token to SATPWrapperContract successfully",
+      );
     }
   }
 
-  private getEthUserPrKey(user: string) {
-    switch (getUserFromPseudonim(user)) {
-      case "userA":
-        return CryptoMaterial.accounts["userA"].privateKey;
-      case "userB":
-        return CryptoMaterial.accounts["userB"].privateKey;
-      case "bridge":
-        return CryptoMaterial.accounts["bridge"].privateKey;
+  public async approveAssets(
+    wrapperAddress: string,
+    assetAttribute: string,
+    inUseTokenType: TokenType,
+  ): Promise<void> {
+    let inUseContractKeyChainId: string;
+    let inUseContractName: string;
+    let inUseTokenAttribute: string;
+    switch (inUseTokenType) {
+      case TokenType.Fungible:
+        inUseContractKeyChainId = this.keychainPluginFungible.getKeychainId();
+        inUseContractName =
+          this.tokenContracts.get(SupportedContractTypes.FUNGIBLE) ?? "";
+        inUseTokenAttribute = "amount";
+        break;
+      case TokenType.Nonfungible:
+        inUseContractKeyChainId =
+          this.keychainPluginNonFungible.getKeychainId();
+        inUseContractName =
+          this.tokenContracts.get(SupportedContractTypes.NONFUNGIBLE) ?? "";
+        inUseTokenAttribute = "tokenId";
+        break;
       default:
-        throw new Error("User not found");
+        throw new Error(
+          `Unsupported token type for approval: ${inUseTokenType}`,
+        );
     }
+    const responseApprove = await this.connector.invokeContract({
+      contractName: inUseContractName,
+      keychainId: inUseContractKeyChainId,
+      invocationType: BesuContractInvocationType.Send,
+      methodName: "approve",
+      params: [wrapperAddress, Number(assetAttribute)],
+      signingCredential: {
+        ethAccount: this.firstHighNetWorthAccount,
+        secret: this.besuKeyPair.privateKey,
+        type: Web3SigningCredentialTypeBesu.PrivateKeyHex,
+      },
+      gas: Number(this.besuConfig.gasConfig?.gasLimit),
+    });
+    expect(responseApprove).toBeTruthy();
+    expect(responseApprove.success).toBeTruthy();
+    this.log.info(
+      `Approved ${inUseTokenAttribute} ${assetAttribute} to SATPWrapperContract`,
+    );
+  }
+
+  public getTestFungibleContractName(): string {
+    return this.tokenContracts.get(SupportedContractTypes.FUNGIBLE) ?? "";
+  }
+  public getTestNonFungibleContractName(): string {
+    return this.tokenContracts.get(SupportedContractTypes.NONFUNGIBLE) ?? "";
+  }
+  public getTestOracleContractName(): string {
+    return this.tokenContracts.get(SupportedContractTypes.ORACLE) ?? "";
+  }
+
+  public getTestFungibleContractAddress(): string {
+    return (
+      this.assetContractAddresses.get(SupportedContractTypes.FUNGIBLE) ?? ""
+    );
+  }
+  public getTestNonFungibleContractAddress(): string {
+    return (
+      this.assetContractAddresses.get(SupportedContractTypes.NONFUNGIBLE) ?? ""
+    );
+  }
+
+  public getTestFungibleContractAbi(): any {
+    return this.tokenContractCodes.get(SupportedContractTypes.FUNGIBLE).abi;
+  }
+  public getTestNonFungibleContractAbi(): any {
+    return this.tokenContractCodes.get(SupportedContractTypes.NONFUNGIBLE).abi;
+  }
+
+  public getTestOwnerAccount(): string {
+    return this.firstHighNetWorthAccount;
+  }
+
+  public getBridgeEthAccount(): string {
+    return this.bridgeEthAccount.address;
+  }
+
+  public getTestOwnerSigningCredential(): Web3SigningCredential {
+    return {
+      ethAccount: this.firstHighNetWorthAccount,
+      secret: this.besuKeyPair.privateKey,
+      type: Web3SigningCredentialTypeBesu.PrivateKeyHex,
+    };
+  }
+
+  public getBridgeEthAccountSigningCredential(): Web3SigningCredential {
+    return {
+      ethAccount: this.bridgeEthAccount.address,
+      secret: this.bridgeEthAccount.privateKey,
+      type: Web3SigningCredentialTypeBesu.PrivateKeyHex,
+    };
+  }
+
+  public async checkBalance(
+    contract_name: string,
+    contract_address: string,
+    contract_abi: any,
+    account: string,
+    amount: string,
+    signingCredential: Web3SigningCredential,
+  ): Promise<void> {
+    const responseBalanceBridge = await this.connector.invokeContract({
+      contractName: contract_name,
+      contractAddress: contract_address,
+      contractAbi: contract_abi,
+      invocationType: BesuContractInvocationType.Call,
+      methodName: "balanceOf",
+      params: [account],
+      signingCredential: signingCredential,
+      gas: Number(this.besuConfig.gasConfig?.gasLimit),
+    });
+
+    expect(responseBalanceBridge).toBeTruthy();
+    expect(responseBalanceBridge.success).toBeTruthy();
+    expect(responseBalanceBridge.callOutput).toBe(amount);
+  }
+
+  // Gets the default asset configuration for testing
+  public get defaultAsset(): Asset {
+    return {
+      id: BesuTestEnvironment.BESU_ASSET_ID,
+      referenceId: BesuTestEnvironment.BESU_REFERENCE_ID[TokenType.Fungible],
+      owner: this.firstHighNetWorthAccount,
+      contractName:
+        this.tokenContracts.get(SupportedContractTypes.FUNGIBLE) ?? "",
+      contractAddress:
+        this.assetContractAddresses.get(SupportedContractTypes.FUNGIBLE) ?? "",
+      networkId: this.network,
+      tokenType: AssetTokenTypeEnum.Fungible,
+      ercTokenStandard: AssetErcTokenStandardEnum.Erc20,
+    };
+  }
+  public get nonFungibleDefaultAsset(): Asset {
+    return {
+      id: BesuTestEnvironment.BESU_ASSET_ID2,
+      referenceId: BesuTestEnvironment.BESU_REFERENCE_ID[TokenType.Nonfungible],
+      owner: this.firstHighNetWorthAccount,
+      contractName:
+        this.tokenContracts.get(SupportedContractTypes.NONFUNGIBLE) ?? "",
+      contractAddress:
+        this.assetContractAddresses.get(SupportedContractTypes.NONFUNGIBLE) ??
+        "",
+      networkId: this.network,
+      tokenType: AssetTokenTypeEnum.Nonfungible,
+      ercTokenStandard: AssetErcTokenStandardEnum.Erc721,
+    };
+  }
+
+  // Returns the assignee account address used for testing transactions
+  get transactRequestPubKey(): string {
+    return this.assigneeEthAccount?.address ?? "";
+  }
+
+  // Oracle related functions
+
+  public getData(
+    contractName: string,
+    contractAddress: string,
+    contractAbi: any,
+    methodName: string,
+    params: string[],
+  ): Promise<any> {
+    return this.connector.invokeContract({
+      contractName,
+      contractAddress,
+      contractAbi,
+      invocationType: BesuContractInvocationType.Call,
+      methodName,
+      params,
+      signingCredential: {
+        ethAccount: this.bridgeEthAccount.address,
+        secret: this.bridgeEthAccount.privateKey,
+        type: Web3SigningCredentialTypeBesu.PrivateKeyHex,
+      },
+      gas: Number(this.besuConfig.gasConfig?.gasLimit),
+    });
+  }
+
+  public async readData(
+    contractName: string,
+    contractAddress: string,
+    contractAbi: any,
+    methodName: string,
+    params: string[],
+  ): Promise<InvokeContractV1Response> {
+    const response = await this.connector.invokeContract({
+      contractName,
+      contractAddress,
+      contractAbi,
+      invocationType: BesuContractInvocationType.Call,
+      methodName,
+      params,
+      signingCredential: {
+        ethAccount: this.bridgeEthAccount.address,
+        secret: this.bridgeEthAccount.privateKey,
+        type: Web3SigningCredentialTypeBesu.PrivateKeyHex,
+      },
+      gas: Number(this.besuConfig.gasConfig?.gasLimit),
+    });
+
+    expect(response).toBeTruthy();
+    expect(response.success).toBeTruthy();
+
+    return response;
+  }
+
+  public async writeData(
+    contractName: string,
+    contractAddress: string,
+    contractAbi: any,
+    methodName: string,
+    params: string[],
+  ): Promise<InvokeContractV1Response> {
+    const response = await this.connector.invokeContract({
+      contractName,
+      contractAddress,
+      contractAbi,
+      invocationType: BesuContractInvocationType.Send,
+      methodName,
+      params,
+      signingCredential: {
+        ethAccount: this.bridgeEthAccount.address,
+        secret: this.bridgeEthAccount.privateKey,
+        type: Web3SigningCredentialTypeBesu.PrivateKeyHex,
+      },
+      gas: Number(this.besuConfig.gasConfig?.gasLimit),
+    });
+
+    expect(response).toBeTruthy();
+    expect(response.success).toBeTruthy();
+
+    return response;
   }
 
   // Stops and destroys the test ledger
