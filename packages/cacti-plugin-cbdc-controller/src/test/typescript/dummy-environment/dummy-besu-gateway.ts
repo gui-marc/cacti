@@ -35,10 +35,11 @@ import { createPGDatabase, setupDBTable } from "./db-infrastructure";
 
 interface IDummyBesuGatewayOptions {
   logLevel: LogLevelDesc;
+  portModifier?: number;
 }
 
 export class DummyBesuGateway implements ILedgerEnvironment {
-  public static readonly CLASS_NAME = "CbdcBridgingAppDummyInfrastructure";
+  public static readonly CLASS_NAME = "DummyBesuGateway";
 
   private static readonly networkName = "CDBC_Network";
 
@@ -63,7 +64,7 @@ export class DummyBesuGateway implements ILedgerEnvironment {
   private transactionApi?: TransactionApi;
   private adminApi?: AdminApi;
 
-  constructor(public readonly options: IDummyBesuGatewayOptions) {
+  constructor(private readonly options: IDummyBesuGatewayOptions) {
     const fnTag = `${DummyBesuGateway.CLASS_NAME}#constructor()`;
     Checks.truthy(options, `${fnTag} arg options`);
 
@@ -162,9 +163,12 @@ export class DummyBesuGateway implements ILedgerEnvironment {
       ],
       proofID: "mockProofID11",
       address: `http://${this.address}`,
-      gatewayClientPort: DEFAULT_PORT_GATEWAY_CLIENT,
-      gatewayServerPort: DEFAULT_PORT_GATEWAY_SERVER,
-      gatewayOapiPort: DEFAULT_PORT_GATEWAY_OAPI,
+      gatewayClientPort:
+        DEFAULT_PORT_GATEWAY_CLIENT + (this.options.portModifier || 0),
+      gatewayServerPort:
+        DEFAULT_PORT_GATEWAY_SERVER + (this.options.portModifier || 0),
+      gatewayOapiPort:
+        DEFAULT_PORT_GATEWAY_OAPI + (this.options.portModifier || 0),
       pubKey: Buffer.from(gatewayKeyPair.publicKey).toString("hex"),
     } as GatewayIdentity;
 
@@ -203,9 +207,11 @@ export class DummyBesuGateway implements ILedgerEnvironment {
     const gatewayRunnerOptions: ISATPGatewayRunnerConstructorOptions = {
       containerImageVersion: DummyBesuGateway.DOCKER_IMAGE_VERSION,
       containerImageName: DummyBesuGateway.DOCKER_IMAGE_NAME,
-      serverPort: DEFAULT_PORT_GATEWAY_SERVER,
-      clientPort: DEFAULT_PORT_GATEWAY_CLIENT,
-      oapiPort: DEFAULT_PORT_GATEWAY_OAPI,
+      serverPort:
+        DEFAULT_PORT_GATEWAY_SERVER + (this.options.portModifier || 0),
+      clientPort:
+        DEFAULT_PORT_GATEWAY_CLIENT + (this.options.portModifier || 0),
+      oapiPort: DEFAULT_PORT_GATEWAY_OAPI + (this.options.portModifier || 0),
       logLevel: this.logLevel,
       emitContainerLogs: true,
       configPath: gatewayDockerFiles.configPath,

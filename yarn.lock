@@ -7373,10 +7373,14 @@ __metadata:
     "@hyperledger/cactus-common": "workspace:^"
     "@hyperledger/cactus-core": "workspace:^"
     "@hyperledger/cactus-core-api": "workspace:^"
+    "@hyperledger/cactus-plugin-bungee-hermes": "workspace:^"
     "@hyperledger/cactus-plugin-keychain-memory": "workspace:^"
     "@hyperledger/cactus-plugin-ledger-connector-besu": "workspace:^"
+    "@hyperledger/cactus-plugin-ledger-connector-ethereum": "workspace:^"
     "@hyperledger/cactus-plugin-satp-hermes": "workspace:^"
+    "@hyperledger/cactus-test-geth-ledger": "workspace:^"
     "@hyperledger/cactus-test-tooling": "workspace:^"
+    "@jest/globals": "npm:^30.3.0"
     "@types/cors": "npm:^2"
     "@types/dockerode": "npm:^4"
     "@types/express": "npm:^5"
@@ -8505,7 +8509,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@hyperledger/cactus-plugin-bungee-hermes@npm:2.1.0, @hyperledger/cactus-plugin-bungee-hermes@workspace:packages/cactus-plugin-bungee-hermes":
+"@hyperledger/cactus-plugin-bungee-hermes@npm:2.1.0, @hyperledger/cactus-plugin-bungee-hermes@workspace:^, @hyperledger/cactus-plugin-bungee-hermes@workspace:packages/cactus-plugin-bungee-hermes":
   version: 0.0.0-use.local
   resolution: "@hyperledger/cactus-plugin-bungee-hermes@workspace:packages/cactus-plugin-bungee-hermes"
   dependencies:
@@ -8941,7 +8945,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@hyperledger/cactus-plugin-ledger-connector-ethereum@npm:2.1.0, @hyperledger/cactus-plugin-ledger-connector-ethereum@workspace:packages/cactus-plugin-ledger-connector-ethereum":
+"@hyperledger/cactus-plugin-ledger-connector-ethereum@npm:2.1.0, @hyperledger/cactus-plugin-ledger-connector-ethereum@workspace:^, @hyperledger/cactus-plugin-ledger-connector-ethereum@workspace:packages/cactus-plugin-ledger-connector-ethereum":
   version: 0.0.0-use.local
   resolution: "@hyperledger/cactus-plugin-ledger-connector-ethereum@workspace:packages/cactus-plugin-ledger-connector-ethereum"
   dependencies:
@@ -9447,7 +9451,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@hyperledger/cactus-test-geth-ledger@npm:2.1.0, @hyperledger/cactus-test-geth-ledger@workspace:packages/cactus-test-geth-ledger":
+"@hyperledger/cactus-test-geth-ledger@npm:2.1.0, @hyperledger/cactus-test-geth-ledger@workspace:^, @hyperledger/cactus-test-geth-ledger@workspace:packages/cactus-test-geth-ledger":
   version: 0.0.0-use.local
   resolution: "@hyperledger/cactus-test-geth-ledger@workspace:packages/cactus-test-geth-ledger"
   dependencies:
@@ -10597,7 +10601,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@jest/globals@npm:30.3.0":
+"@jest/globals@npm:30.3.0, @jest/globals@npm:^30.3.0":
   version: 30.3.0
   resolution: "@jest/globals@npm:30.3.0"
   dependencies:

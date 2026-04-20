@@ -52,9 +52,13 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@hyperledger/cactus-plugin-bungee-hermes": "workspace:^",
     "@hyperledger/cactus-plugin-keychain-memory": "workspace:^",
     "@hyperledger/cactus-plugin-ledger-connector-besu": "workspace:^",
+    "@hyperledger/cactus-plugin-ledger-connector-ethereum": "workspace:^",
+    "@hyperledger/cactus-test-geth-ledger": "workspace:^",
     "@hyperledger/cactus-test-tooling": "workspace:^",
+    "@jest/globals": "^30.3.0",
     "@types/cors": "^2",
     "@types/dockerode": "^4",
     "@types/express": "^5",

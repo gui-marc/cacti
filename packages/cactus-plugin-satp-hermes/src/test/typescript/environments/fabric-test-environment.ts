@@ -123,8 +123,8 @@ export class FabricTestEnvironment {
     this.ledger = new FabricTestLedgerV1({
       emitContainerLogs: true,
       publishAllPorts: true,
-      imageName: DEFAULT_FABRIC_2_AIO_IMAGE_NAME,
-      imageVersion: FABRIC_25_LTS_AIO_IMAGE_VERSION,
+      imageName: "ghcr.io/hyperledger/cactus-fabric-all-in-one",
+      imageVersion: "2024-06-12-4521d10",
       envVars: new Map([["FABRIC_VERSION", FABRIC_25_LTS_AIO_FABRIC_VERSION]]),
       networkName: this.dockerNetwork,
       logLevel: this.level,

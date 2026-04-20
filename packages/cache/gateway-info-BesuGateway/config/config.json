@@ -20,7 +20,7 @@
     "gatewayClientPort": 3011,
     "gatewayServerPort": 3010,
     "gatewayOapiPort": 4010,
-    "pubKey": "02b339b20921f53a2a36eb427849dc2f50fb8ef620860508d05404541da73798ac"
+    "pubKey": "036bc0a29e5ab3a34442aca1d05f45af091746422c154c114bf1d2b3a7531a7e9f"
   },
   "logLevel": "DEBUG",
   "counterPartyGateways": [
@@ -45,13 +45,13 @@
       "gatewayClientPort": 3011,
       "gatewayServerPort": 3010,
       "gatewayOapiPort": 4010,
-      "pubKey": "02b339b20921f53a2a36eb427849dc2f50fb8ef620860508d05404541da73798ac"
+      "pubKey": "036bc0a29e5ab3a34442aca1d05f45af091746422c154c114bf1d2b3a7531a7e9f"
     }
   ],
   "localRepository": {
     "client": "pg",
     "connection": {
-      "host": "172.18.0.3",
+      "host": "172.18.0.8",
       "user": "user123123",
       "password": "password",
       "database": "my_database",
@@ -62,7 +62,7 @@
   "remoteRepository": {
     "client": "pg",
     "connection": {
-      "host": "172.18.0.4",
+      "host": "172.18.0.10",
       "user": "user123123",
       "password": "password",
       "database": "my_database",
@@ -79,14 +79,14 @@
           "ledgerType": "BESU_2X"
         },
         "signingCredential": {
-          "ethAccount": "0xc6aE1b5d8279B9dB13C758780c9b885261F77c77",
-          "secret": "0x024f9291e05c4c2361942bcf4aa75acc127bf600faa006cd61fde25aa00dae32",
+          "ethAccount": "0xd977a06BE1fC4ccAf1e1680FA8C1F486eb4A2751",
+          "secret": "0x05c7ca8a577eaa56ad153e1a514aa62addd986dd063fefe99ecb5cf092585a96",
           "type": "PRIVATE_KEY_HEX"
         },
         "gas": 9999999999,
         "connectorOptions": {
-          "rpcApiHttpHost": "http://172.18.0.2:8545",
-          "rpcApiWsHost": "ws://172.18.0.2:8546"
+          "rpcApiHttpHost": "http://172.18.0.6:8545",
+          "rpcApiWsHost": "ws://172.18.0.6:8546"
         },
         "claimFormats": [
           1
@@ -96,8 +96,8 @@
   },
   "enableCrashRecovery": false,
   "keyPair": {
-    "publicKey": "02b339b20921f53a2a36eb427849dc2f50fb8ef620860508d05404541da73798ac",
-    "privateKey": "ff0ebc80c995c2fc4aabb42b69fc22804c334307f087c4410a8dff619e6f0959"
+    "publicKey": "036bc0a29e5ab3a34442aca1d05f45af091746422c154c114bf1d2b3a7531a7e9f",
+    "privateKey": "9542e11ff20c971d7427aa976284956e05e083826c1436aa76385e90e1ed4ee5"
   },
   "ontologyPath": "/opt/cacti/satp-hermes/ontologies"
 }

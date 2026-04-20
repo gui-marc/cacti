@@ -96,11 +96,11 @@ export interface PeerCerts {
 }
 
 export const DEFAULT_FABRIC_2_AIO_IMAGE_NAME =
-  "ghcr.io/hyperledger-cacti/cactus-fabric2-all-in-one";
-export const DEFAULT_FABRIC_2_AIO_IMAGE_VERSION = "2023-08-17-issue2057-pr2135";
+  "ghcr.io/hyperledger/cactus-fabric-all-in-one";
+export const DEFAULT_FABRIC_2_AIO_IMAGE_VERSION = "2024-06-12-4521d10";
 export const DEFAULT_FABRIC_2_AIO_FABRIC_VERSION = "2.4.4";
 
-export const FABRIC_25_LTS_AIO_IMAGE_VERSION = "v2.1.0";
+export const FABRIC_25_LTS_AIO_IMAGE_VERSION = "2024-06-12-4521d10";
 export const FABRIC_25_LTS_AIO_FABRIC_VERSION = "2.5.6";
 
 /*
@@ -108,7 +108,7 @@ export const FABRIC_25_LTS_AIO_FABRIC_VERSION = "2.5.6";
  */
 const DEFAULT_OPTS = Object.freeze({
   imageName: "ghcr.io/hyperledger/cactus-fabric-all-in-one",
-  imageVersion: "v1.0.0-rc.2",
+  imageVersion: "2024-06-12-4521d10",
   envVars: new Map([["FABRIC_VERSION", "1.4.8"]]),
   stateDatabase: STATE_DATABASE.COUCH_DB,
   orgList: ["org1", "org2"],
@@ -1616,7 +1616,7 @@ export class FabricTestLedgerV1 implements ITestLedger {
         [],
         [],
         createOptions,
-        {},
+        {Privileged: true},
         (err: any) => {
           if (err) {
             reject(err);
