@@ -8,26 +8,31 @@ import {
   TransactionStatus,
 } from "../types";
 import { TransactionStore } from "../store/transaction-store";
-import { FXProvidersStore } from "../store/fx-providers-store";
 import { ComplianceProvidersStore } from "../store/compliance-providers-store";
+import { FXProvisionStrategy } from "./fx-provision";
 import axios from "axios";
+import { Logger, LogLevelDesc } from "@hyperledger/cactus-common";
 
 export default class CBDCController {
+  private readonly log: Logger;
+
   private readonly store: TransactionStore;
-  private readonly fxProvidersStore: FXProvidersStore;
+  private readonly fxProvisionStrategy: FXProvisionStrategy;
   private readonly complianceProvidersStore: ComplianceProvidersStore;
   private readonly infrastructure: IInfrastructure;
 
   constructor(
     store: TransactionStore,
-    fxProvidersStore: FXProvidersStore,
+    fxProvisionStrategy: FXProvisionStrategy,
     complianceProvidersStore: ComplianceProvidersStore,
     infrastructure: IInfrastructure,
+    logLevel: LogLevelDesc = "INFO",
   ) {
     this.store = store;
-    this.fxProvidersStore = fxProvidersStore;
+    this.fxProvisionStrategy = fxProvisionStrategy;
     this.complianceProvidersStore = complianceProvidersStore;
     this.infrastructure = infrastructure;
+    this.log = new Logger({ label: "CBDCController", level: logLevel });
   }
 
   public async initiateTransaction(
@@ -44,7 +49,7 @@ export default class CBDCController {
       amount: req.amount,
       timeToExpire: req.timeToExpire,
       complianceProviders: req.complianceProviders,
-      status: TransactionStatus.PENDING,
+      status: TransactionStatus.SETTING_FX_RATE,
     } satisfies ITransaction;
 
     try {
@@ -56,13 +61,20 @@ export default class CBDCController {
     }
 
     try {
-      await this.requestTransactionFXRate(
+      await this.requestTransactionFXRate(transaction);
+    } catch (error) {
+      await this.fxProvisionStrategy.releaseLiquidity(
         req.sourceChainCode,
         req.destinationChainCode,
-        transactionID,
+        req.amount,
       );
-    } catch (error) {
-      throw new Error("Error while requesting FX rate for transaction", {
+
+      await this.store.update(transactionID, {
+        ...transaction,
+        status: TransactionStatus.FAILED,
+      });
+
+      throw new Error(`Error while requesting FX quote for transaction:`, {
         cause: error,
       });
     }
@@ -70,12 +82,20 @@ export default class CBDCController {
     try {
       await this.requestComplianceChecks(transactionID);
     } catch (error) {
-      throw new Error(
-        "Error while requesting compliance checks for transaction",
-        {
-          cause: error,
-        },
+      await this.fxProvisionStrategy.releaseLiquidity(
+        req.sourceChainCode,
+        req.destinationChainCode,
+        req.amount,
       );
+
+      await this.store.update(transactionID, {
+        ...transaction,
+        status: TransactionStatus.FAILED,
+      });
+
+      throw new Error(`Error while requesting FX quote for transaction:`, {
+        cause: error,
+      });
     }
 
     try {
@@ -93,6 +113,19 @@ export default class CBDCController {
       });
     }
 
+    try {
+      await this.fxProvisionStrategy.confirmSettlement(
+        req.sourceChainCode,
+        req.destinationChainCode,
+        req.amount,
+      );
+    } catch (error) {
+      this.log.error(
+        `Error confirming settlement with FX provider for transaction ${transactionID}`,
+        error,
+      );
+    }
+
     await this.store.update(transactionID, {
       ...transaction,
       status: TransactionStatus.COMPLETED,
@@ -100,46 +133,23 @@ export default class CBDCController {
   }
 
   private async requestTransactionFXRate(
-    sourceChainCode: string,
-    destinationChainCode: string,
-    transactionId: string,
+    transaction: ITransaction,
   ): Promise<void> {
-    const transaction = await this.store.get(transactionId);
-    if (!transaction) {
-      throw new Error(`Transaction with id ${transactionId} not found`);
-    }
-
-    const fxProviders = await this.fxProvidersStore.getAllForChainPair(
-      sourceChainCode,
-      destinationChainCode,
+    const quote = await this.fxProvisionStrategy.getFXQuoteAndLockLiquidity(
+      transaction.sourceChainCode,
+      transaction.destinationChainCode,
+      transaction.amount,
+      {
+        // TODO: these limits should be defined based on the transaction details and not hardcoded
+        min: 0,
+        max: Number.MAX_SAFE_INTEGER,
+      },
     );
 
-    if (fxProviders.length === 0) {
-      throw new Error(
-        `No FX providers found for chain pair ${sourceChainCode}-${destinationChainCode}`,
-      );
-    }
-
-    await Promise.all(
-      fxProviders.map(async (provider) => {
-        try {
-          await axios.post(provider.endpoint, {
-            transactionId,
-            sourceChainCode,
-            destinationChainCode,
-          });
-        } catch (error) {
-          console.error(
-            `Error requesting FX rate from provider ${provider.id} for transaction ${transactionId}, skipping:`,
-            error,
-          );
-        }
-      }),
-    );
-
-    await this.store.update(transactionId, {
+    await this.store.update(transaction.id, {
       ...transaction,
-      status: TransactionStatus.SETTING_FX_RATE,
+      fxRate: quote.rate,
+      status: TransactionStatus.COMPLIANCE_CHECKS,
     });
   }
 
@@ -214,6 +224,14 @@ export default class CBDCController {
     destinationChain: string,
     amount: number,
   ) {
+    this.log.debug("Performing SATP transfer for transaction", transactionId);
+
+    const transaction = await this.store.get(transactionId);
+
+    if (!transaction) {
+      throw new Error(`Transaction with id ${transactionId} not found`);
+    }
+
     const sourceEnvironment = this.infrastructure.environments[sourceChain];
     const destinationEnvironment =
       this.infrastructure.environments[destinationChain];
@@ -228,10 +246,21 @@ export default class CBDCController {
       );
     }
 
+    this.log.debug("Getting assets from environments...");
+
+    if (!transaction.fxRate) {
+      throw new Error(`FX rate not set for transaction ${transactionId}`);
+    }
+
     const [sourceAsset, receiverAsset] = await Promise.all([
       sourceEnvironment.getAsset(senderAddress, amount),
-      destinationEnvironment.getAsset(receiverAddress, amount),
+      destinationEnvironment.getAsset(
+        receiverAddress,
+        amount * transaction.fxRate!,
+      ),
     ]);
+
+    this.log.debug({ sourceAsset, receiverAsset });
 
     if (!sourceAsset) {
       throw new Error(
@@ -245,19 +274,29 @@ export default class CBDCController {
       );
     }
 
-    const sourceTransactionApi = sourceEnvironment.getTransactionApi();
-
     try {
       // The transfer always begins on the source chain, so we use the source chain's transaction API to execute it
-      await sourceTransactionApi.transact({
+      await sourceEnvironment.transact({
         contextID: transactionId,
         receiverAsset,
         sourceAsset,
       });
     } catch (error) {
-      console.error(
-        `Error executing SATP transaction ${transactionId} on source chain ${sourceChain}:`,
+      this.log.error(
+        `Error performing SATP transfer for transaction ${transactionId}`,
         error,
+      );
+
+      await this.store.update(transactionId, {
+        ...((await this.store.get(transactionId)) as ITransaction),
+        status: TransactionStatus.FAILED,
+      });
+
+      throw new Error(
+        `Error performing SATP transfer for transaction ${transactionId}`,
+        {
+          cause: error,
+        },
       );
     }
   }

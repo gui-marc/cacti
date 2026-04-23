@@ -16,14 +16,14 @@ import { registerWebServiceEndpoint } from "@hyperledger/cactus-core";
 import { InitiateTransactionEndpointV1 } from "./web-services/initiate-transaction-endpoint";
 import CBDCController from "./core/cbdc-controller";
 import { TransactionStore } from "./store/transaction-store";
-import { FXProvidersStore } from "./store/fx-providers-store";
 import { ComplianceProvidersStore } from "./store/compliance-providers-store";
+import { FXProvisionStrategy } from "./core/fx-provision";
 
 export interface IPluginCBDCOptions extends ICactusPluginOptions {
   logLevel?: LogLevelDesc;
   environments: Record<string, ILedgerEnvironment>;
   transactionStore: TransactionStore;
-  fxProvidersStore: FXProvidersStore;
+  fxProvisionStrategy: FXProvisionStrategy;
   complianceProvidersStore: ComplianceProvidersStore;
 }
 
@@ -56,7 +56,7 @@ export class PluginCBDCController implements ICactusPlugin {
 
     this.controller = new CBDCController(
       this.options.transactionStore,
-      this.options.fxProvidersStore,
+      this.options.fxProvisionStrategy,
       this.options.complianceProvidersStore,
       this.infrastructure,
     );
@@ -68,6 +68,10 @@ export class PluginCBDCController implements ICactusPlugin {
 
   getPackageName(): string {
     return `@hyperledger-cacti/cacti-plugin-cbdc-controller`;
+  }
+
+  getController() {
+    return this.controller;
   }
 
   async onPluginInit(): Promise<unknown> {

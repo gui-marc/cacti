@@ -6,7 +6,7 @@ export interface FXQuote {
   availableLiquidity: number;
 }
 
-type DynamicRange =
+export type DynamicRange =
   | { min?: number; max: number }
   | { min: number; max?: number }
   | { min: number; max: number };

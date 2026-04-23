@@ -1,6 +1,7 @@
 import {
-  TransactionApi,
+  TransactRequest,
   TransactRequestSourceAsset,
+  TransactResponse,
 } from "@hyperledger/cactus-plugin-satp-hermes";
 import { LogLevelDesc } from "@hyperledger/cactus-common";
 import CBDCController from "./core/cbdc-controller";
@@ -9,13 +10,13 @@ export interface IInfrastructure {
   environments: Record<string, ILedgerEnvironment>;
 }
 
-export interface ILedgerEnvironment {
+export type ILedgerEnvironment = {
   getAsset(
     id: string,
     amount: number,
   ): Promise<TransactRequestSourceAsset> | TransactRequestSourceAsset;
-  getTransactionApi(): TransactionApi;
-}
+  transact(request: TransactRequest): Promise<TransactResponse>;
+};
 
 export interface IRequestOptions {
   infrastructure: IInfrastructure;
