@@ -200,6 +200,31 @@ export class DummyBesuAMMEnvironment {
     );
   }
 
+  public async getQuote(
+    from: string,
+    to: string,
+    amount: number,
+  ): Promise<FXQuote> {
+    const tokenIn = this.requireCurrency(from);
+    const tokenOut = this.requireCurrency(to);
+
+    const pair = this.requirePair(tokenIn, tokenOut);
+
+    const { amountOut, reserveOut } = await this.computeSwapOutput(
+      pair,
+      tokenIn,
+      amount,
+    );
+
+    return {
+      id: uuidv4(),
+      baseCurrency: from,
+      destinationCurrency: to,
+      rate: Number(amountOut) / amount,
+      availableLiquidity: Number(reserveOut),
+    };
+  }
+
   public async swap(
     from: string,
     to: string,
@@ -212,48 +237,8 @@ export class DummyBesuAMMEnvironment {
 
     const pair = this.requirePair(tokenIn, tokenOut);
 
-    const reserve0Res = await this.connector.invokeContract({
-      contractName: "LiquidityPoolPair",
-      contractAddress: pair.address,
-      contractAbi: LiquidityPoolPairContract.abi,
-      invocationType: BesuContractInvocationType.Call,
-      methodName: "reserve0",
-      params: [],
-      signingCredential,
-      gas: 1_000_000,
-    });
-    const reserve1Res = await this.connector.invokeContract({
-      contractName: "LiquidityPoolPair",
-      contractAddress: pair.address,
-      contractAbi: LiquidityPoolPairContract.abi,
-      invocationType: BesuContractInvocationType.Call,
-      methodName: "reserve1",
-      params: [],
-      signingCredential,
-      gas: 1_000_000,
-    });
-
-    const reserve0 = BigInt(reserve0Res.callOutput.toString());
-    const reserve1 = BigInt(reserve1Res.callOutput.toString());
-
-    const isInToken0 =
-      tokenIn.address.toLowerCase() === pair.token0.toLowerCase();
-    const reserveIn = isInToken0 ? reserve0 : reserve1;
-    const reserveOut = isInToken0 ? reserve1 : reserve0;
-
-    const amountIn = BigInt(amount);
-    if (reserveIn === 0n || reserveOut === 0n) {
-      throw new Error(`No liquidity for pair ${from}/${to}`);
-    }
-    const amountOut = (amountIn * reserveOut) / (reserveIn + amountIn);
-    if (amountOut <= 0n) {
-      throw new Error(`Computed swap output is zero for amount ${amount}`);
-    }
-    if (amountOut >= reserveOut) {
-      throw new Error(
-        `Insufficient liquidity: requested ${amountOut}, reserve ${reserveOut}`,
-      );
-    }
+    const { amountIn, amountOut, reserveOut, isInToken0 } =
+      await this.computeSwapOutput(pair, tokenIn, amount);
 
     await this.connector.invokeContract({
       contractName: tokenIn.contractName,
@@ -294,6 +279,63 @@ export class DummyBesuAMMEnvironment {
       rate: amountOutNum / amount,
       availableLiquidity: reserveOutAfter,
     };
+  }
+
+  private async computeSwapOutput(
+    pair: { address: string; token0: string },
+    tokenIn: BesuTokenInfo,
+    amount: number,
+  ): Promise<{
+    amountIn: bigint;
+    amountOut: bigint;
+    reserveIn: bigint;
+    reserveOut: bigint;
+    isInToken0: boolean;
+  }> {
+    const reserve0Res = await this.connector.invokeContract({
+      contractName: "LiquidityPoolPair",
+      contractAddress: pair.address,
+      contractAbi: LiquidityPoolPairContract.abi,
+      invocationType: BesuContractInvocationType.Call,
+      methodName: "reserve0",
+      params: [],
+      signingCredential: this.ownerSigningCredential,
+      gas: 1_000_000,
+    });
+    const reserve1Res = await this.connector.invokeContract({
+      contractName: "LiquidityPoolPair",
+      contractAddress: pair.address,
+      contractAbi: LiquidityPoolPairContract.abi,
+      invocationType: BesuContractInvocationType.Call,
+      methodName: "reserve1",
+      params: [],
+      signingCredential: this.ownerSigningCredential,
+      gas: 1_000_000,
+    });
+
+    const reserve0 = BigInt(reserve0Res.callOutput.toString());
+    const reserve1 = BigInt(reserve1Res.callOutput.toString());
+
+    const isInToken0 =
+      tokenIn.address.toLowerCase() === pair.token0.toLowerCase();
+    const reserveIn = isInToken0 ? reserve0 : reserve1;
+    const reserveOut = isInToken0 ? reserve1 : reserve0;
+
+    const amountIn = BigInt(amount);
+    if (reserveIn === 0n || reserveOut === 0n) {
+      throw new Error(`No liquidity for pair ${tokenIn.contractName}`);
+    }
+    const amountOut = (amountIn * reserveOut) / (reserveIn + amountIn);
+    if (amountOut <= 0n) {
+      throw new Error(`Computed swap output is zero for amount ${amount}`);
+    }
+    if (amountOut >= reserveOut) {
+      throw new Error(
+        `Insufficient liquidity: requested ${amountOut}, reserve ${reserveOut}`,
+      );
+    }
+
+    return { amountIn, amountOut, reserveIn, reserveOut, isInToken0 };
   }
 
   public async tearDown(): Promise<void> {
