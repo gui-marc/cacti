@@ -193,27 +193,29 @@ export default class CBDCController {
 
     let worstResult = ComplianceResult.APPROVED;
 
-    results.forEach((response) => {
-      if (response && response.status === 200) {
-        const { transactionId, result } = response.data;
+    results
+      .filter((r) => r !== undefined)
+      .forEach((response) => {
+        if (response && response.status === 200) {
+          const { transactionId, result } = response.data;
 
-        if (transactionId !== transaction.id) {
-          console.warn(
-            `Received compliance check response for transaction ${transactionId} but expected ${transaction.id}, skipping`,
-          );
-          return;
-        }
+          if (transactionId !== transaction.id) {
+            console.warn(
+              `Received compliance check response for transaction ${transactionId} but expected. Skipping ${transaction.id}`,
+            );
+            return;
+          }
 
-        if (result === ComplianceResult.REJECTED) {
-          worstResult = ComplianceResult.REJECTED;
-        } else if (
-          result === ComplianceResult.MARKED_FOR_REVIEW &&
-          worstResult !== ComplianceResult.REJECTED
-        ) {
-          worstResult = ComplianceResult.MARKED_FOR_REVIEW;
+          if (result === ComplianceResult.REJECTED) {
+            worstResult = ComplianceResult.REJECTED;
+          } else if (
+            result === ComplianceResult.MARKED_FOR_REVIEW &&
+            worstResult !== ComplianceResult.REJECTED
+          ) {
+            worstResult = ComplianceResult.MARKED_FOR_REVIEW;
+          }
         }
-      }
-    });
+      });
   }
 
   private async performSATPTransfer(
@@ -256,7 +258,7 @@ export default class CBDCController {
       sourceEnvironment.getAsset(senderAddress, amount),
       destinationEnvironment.getAsset(
         receiverAddress,
-        amount * transaction.fxRate!,
+        Math.floor(amount * transaction.fxRate! * 1e6), // Assuming fxRate is defined as destination/source, we multiply the amount by the fxRate to get the destination amount. The 1e6 factor is to account for potential decimals in the FX rate
       ),
     ]);
 

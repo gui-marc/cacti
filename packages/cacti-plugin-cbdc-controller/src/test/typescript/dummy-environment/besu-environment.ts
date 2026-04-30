@@ -187,7 +187,7 @@ export class BesuTestEnvironment {
     });
 
     if (this.tokenContracts.has(SupportedContractTypes.FUNGIBLE)) {
-      this.keychainPluginFungible.set(
+      await this.keychainPluginFungible.set(
         this.tokenContracts.get(SupportedContractTypes.FUNGIBLE) ?? "",
         JSON.stringify(SATPTokenContract),
       );
@@ -198,7 +198,7 @@ export class BesuTestEnvironment {
     }
 
     if (this.tokenContracts.has(SupportedContractTypes.NONFUNGIBLE)) {
-      this.keychainPluginNonFungible.set(
+      await this.keychainPluginNonFungible.set(
         this.tokenContracts.get(SupportedContractTypes.NONFUNGIBLE) ?? "",
         JSON.stringify(SATPNFTokenContract),
       );

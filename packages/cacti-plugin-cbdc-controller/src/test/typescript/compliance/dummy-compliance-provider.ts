@@ -28,6 +28,7 @@ export class DummyComplianceProvider {
 
     this.app.post(this.ENDPOINT, (req, res) => {
       res.json({
+        transactionId: req.body.transactionId,
         result: this.nextCheckResponse,
       });
     });

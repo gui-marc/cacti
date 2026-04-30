@@ -48,7 +48,8 @@
   ],
   "scripts": {
     "test": "jest  ./src/test/typescript",
-    "lint": "eslint --config ./eslint.config.mjs '**/*.{js,ts}' --quiet --fix"
+    "lint": "eslint --config ./eslint.config.mjs '**/*.{js,ts}' --quiet --fix",
+    "forge:build:test": "forge build ./src/test/solidity/contracts/*.sol --out ./src/test/solidity/generated"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -59,6 +60,7 @@
     "@hyperledger/cactus-test-geth-ledger": "workspace:^",
     "@hyperledger/cactus-test-tooling": "workspace:^",
     "@jest/globals": "^30.3.0",
+    "@openzeppelin/contracts": "5.0.2",
     "@types/cors": "^2",
     "@types/dockerode": "^4",
     "@types/express": "^5",
@@ -67,6 +69,7 @@
     "dockerode": "^4.0.10",
     "eslint": "^10.1.0",
     "eslint-plugin-prettier": "^5.5.5",
+    "forge-std": "https://github.com/foundry-rs/forge-std.git#66bf4e2c92cf507531599845e8d5a08cc2e3b5bb",
     "globals": "^17.4.0",
     "jest": "^30.3.0",
     "jest-util": "^30.3.0",
@@ -86,6 +89,7 @@
     "npm": ">= 9"
   },
   "dependencies": {
+    "@foundry-rs/hardhat-forge": "0.1.17",
     "@hyperledger/cactus-common": "workspace:^",
     "@hyperledger/cactus-core": "workspace:^",
     "@hyperledger/cactus-core-api": "workspace:^",

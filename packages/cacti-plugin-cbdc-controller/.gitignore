@@ -1,2 +1,4 @@
 .vscode
 reports/
+lib
+cache
