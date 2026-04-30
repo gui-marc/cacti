@@ -40,11 +40,11 @@ import path from "path";
 import {
   EthereumTestEnvironment,
   SupportedContractTypes as SupportedEthereumContractTypes,
-} from "./ethereum-environment";
+} from "../dummy-environment/ethereum-environment";
 import {
   BesuTestEnvironment,
   SupportedContractTypes as SupportedBesuContractTypes,
-} from "./besu-environment";
+} from "../dummy-environment/besu-environment";
 import { createMigrationSource } from "@hyperledger/cactus-plugin-satp-hermes/src/main/typescript/database/knex-migration-source";
 import { knexLocalInstance } from "@hyperledger/cactus-plugin-satp-hermes/src/main/typescript/database/knexfile";
 import { knexRemoteInstance } from "@hyperledger/cactus-plugin-satp-hermes/src/main/typescript/database/knexfile-remote";
@@ -167,7 +167,7 @@ beforeAll(async () => {
   }
 }, TIMEOUT);
 
-describe("SATPGateway sending a token from Besu to Ethereum", () => {
+describe("CBDC controller using constant FX provision", () => {
   it(
     "should realize a transfer",
     async () => {
@@ -289,6 +289,7 @@ describe("SATPGateway sending a token from Besu to Ethereum", () => {
       expect(identity.gatewayClientPort).toBe(3011);
       expect(identity.address).toBe("http://localhost");
       await gateway.startup();
+      await gateway.getOrCreateHttpServer();
 
       const dispatcher = gateway.BLODispatcherInstance;
 
@@ -298,6 +299,26 @@ describe("SATPGateway sending a token from Besu to Ethereum", () => {
 
       amm.addLiquidity("besu", 523);
       amm.addLiquidity("ethereum", 413);
+
+      await besuEnv.mintTokens("100", TokenType.Fungible);
+
+      const besuWrapper = (
+        await dispatcher!.GetApproveAddress({
+          networkId: besuEnv.network,
+          tokenType: TokenType.Fungible,
+        })
+      ).approveAddress;
+
+      await besuEnv.giveRoleToBridge(besuWrapper);
+      await besuEnv.approveAssets(besuWrapper, "100", TokenType.Fungible);
+
+      const ethWrapper = (
+        await dispatcher!.GetApproveAddress({
+          networkId: ethereumEnv.network,
+          tokenType: TokenType.Fungible,
+        })
+      ).approveAddress;
+      await ethereumEnv.giveRoleToBridge(ethWrapper);
 
       await cbdcController.initiateTransaction({
         amount: 100,
@@ -324,7 +345,7 @@ describe("SATPGateway sending a token from Besu to Ethereum", () => {
         ethereumEnv.getTestFungibleContractAddress(),
         ethereumEnv.getTestFungibleContractAbi(),
         ethereumEnv.getTestOwnerAccount(),
-        "100", // todo: set fx rate
+        "78967495",
         ethereumEnv.getTestOwnerSigningCredential(),
       );
       log.info("Amount was transfer correctly to the Owner account");
