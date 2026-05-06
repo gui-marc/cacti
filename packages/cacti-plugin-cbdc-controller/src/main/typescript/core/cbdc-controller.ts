@@ -4,6 +4,7 @@ import {
   IGetComplianceCheckResponse,
   IInfrastructure,
   IInitiateTransactionRequest,
+  InitiateTransactionResult,
   ITransaction,
   TransactionStatus,
 } from "../types";
@@ -37,7 +38,7 @@ export default class CBDCController {
 
   public async initiateTransaction(
     req: IInitiateTransactionRequest,
-  ): Promise<void> {
+  ): Promise<InitiateTransactionResult> {
     const transactionID = this.generateTransactionID();
 
     const transaction = {
@@ -79,8 +80,9 @@ export default class CBDCController {
       });
     }
 
+    let complianceResult: ComplianceResult;
     try {
-      await this.requestComplianceChecks(transactionID);
+      complianceResult = await this.requestComplianceChecks(transactionID);
     } catch (error) {
       await this.fxProvisionStrategy.releaseLiquidity(
         req.sourceChainCode,
@@ -98,14 +100,61 @@ export default class CBDCController {
       });
     }
 
-    try {
-      await this.performSATPTransfer(
-        transactionID,
-        req.senderAddress,
-        req.receiverAddress,
+    const persisted = await this.store.get(transactionID);
+    if (!persisted) {
+      throw new Error(`Transaction with id ${transactionID} not found`);
+    }
+
+    if (complianceResult === ComplianceResult.REJECTED) {
+      await this.fxProvisionStrategy.releaseLiquidity(
         req.sourceChainCode,
         req.destinationChainCode,
         req.amount,
+      );
+      await this.store.update(transactionID, {
+        ...persisted,
+        status: TransactionStatus.FAILED,
+      });
+      throw new Error(
+        `Transaction ${transactionID} rejected by compliance check`,
+      );
+    }
+
+    if (complianceResult === ComplianceResult.MARKED_FOR_REVIEW) {
+      await this.store.update(transactionID, {
+        ...persisted,
+        status: TransactionStatus.MARKED_FOR_REVIEW,
+      });
+      return { kind: "marked_for_review", transactionId: transactionID };
+    }
+
+    await this.executeTransfer(persisted);
+
+    return { kind: "completed", transactionId: transactionID };
+  }
+
+  public async acceptTransaction(transactionId: string): Promise<void> {
+    const transaction = await this.store.get(transactionId);
+    if (!transaction) {
+      throw new Error(`Transaction with id ${transactionId} not found`);
+    }
+    if (transaction.status !== TransactionStatus.MARKED_FOR_REVIEW) {
+      throw new Error(
+        `Cannot accept transaction ${transactionId} in status ${transaction.status}`,
+      );
+    }
+    await this.executeTransfer(transaction);
+  }
+
+  private async executeTransfer(transaction: ITransaction): Promise<void> {
+    try {
+      await this.performSATPTransfer(
+        transaction.id,
+        transaction.senderAddress,
+        transaction.receiverAddress,
+        transaction.sourceChainCode,
+        transaction.destinationChainCode,
+        transaction.amount,
       );
     } catch (error) {
       throw new Error("Error while performing SATP transfer for transaction", {
@@ -115,18 +164,18 @@ export default class CBDCController {
 
     try {
       await this.fxProvisionStrategy.confirmSettlement(
-        req.sourceChainCode,
-        req.destinationChainCode,
-        req.amount,
+        transaction.sourceChainCode,
+        transaction.destinationChainCode,
+        transaction.amount,
       );
     } catch (error) {
       this.log.error(
-        `Error confirming settlement with FX provider for transaction ${transactionID}`,
+        `Error confirming settlement with FX provider for transaction ${transaction.id}`,
         error,
       );
     }
 
-    await this.store.update(transactionID, {
+    await this.store.update(transaction.id, {
       ...transaction,
       status: TransactionStatus.COMPLETED,
     });
@@ -153,7 +202,9 @@ export default class CBDCController {
     });
   }
 
-  private async requestComplianceChecks(transactionId: string): Promise<void> {
+  private async requestComplianceChecks(
+    transactionId: string,
+  ): Promise<ComplianceResult> {
     const transaction = await this.store.get(transactionId);
 
     if (!transaction) {
@@ -216,6 +267,13 @@ export default class CBDCController {
           }
         }
       });
+
+    await this.store.update(transactionId, {
+      ...transaction,
+      complianceResult: worstResult,
+    });
+
+    return worstResult;
   }
 
   private async performSATPTransfer(

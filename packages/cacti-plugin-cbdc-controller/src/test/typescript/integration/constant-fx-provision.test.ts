@@ -52,8 +52,7 @@ import { randomUUID } from "crypto";
 import { InMemoryComplianceProvidersStore } from "../../../main/typescript/store/compliance-providers-store";
 import { InMemoryTransactionStore } from "../../../main/typescript/store/transaction-store";
 import { ILedgerEnvironment } from "../../../main/typescript/types";
-import { DummyMemoryFXProvisionStrategy } from "../fx-provision/dummy-memory-fx-provision-strategy";
-import { DummyInMemoryAMM } from "../fx-provision/dummy-memory-amm";
+import ConstantFxProvisionStrategy from "../fx-provision/constant-fx-provision-strategy";
 
 const logLevel: LogLevelDesc = "DEBUG";
 const log = LoggerProvider.getOrCreate({
@@ -255,12 +254,10 @@ describe("CBDC controller using constant FX provision", () => {
         },
       };
 
-      const amm = new DummyInMemoryAMM();
-
       const cbdcPlugin = await cbdcFactory.create({
         instanceId: "test-instance",
         complianceProvidersStore: new InMemoryComplianceProvidersStore(),
-        fxProvisionStrategy: new DummyMemoryFXProvisionStrategy(amm),
+        fxProvisionStrategy: new ConstantFxProvisionStrategy(1.5),
         transactionStore: new InMemoryTransactionStore(),
         environments: { besu: besuCBDCEnv, ethereum: ethereumCBDCEnv },
         logLevel,
@@ -294,11 +291,6 @@ describe("CBDC controller using constant FX provision", () => {
       const dispatcher = gateway.BLODispatcherInstance;
 
       const cbdcController = cbdcPlugin.getController();
-
-      log.info("Adding liquidity to the AMM");
-
-      amm.addLiquidity("besu", 523);
-      amm.addLiquidity("ethereum", 413);
 
       await besuEnv.mintTokens("100", TokenType.Fungible);
 
@@ -345,7 +337,7 @@ describe("CBDC controller using constant FX provision", () => {
         ethereumEnv.getTestFungibleContractAddress(),
         ethereumEnv.getTestFungibleContractAbi(),
         ethereumEnv.getTestOwnerAccount(),
-        "78967495",
+        "150", // 100 * 1.5 (the FX rate defined in the ConstantFxProvisionStrategy)
         ethereumEnv.getTestOwnerSigningCredential(),
       );
       log.info("Amount was transfer correctly to the Owner account");

@@ -14,6 +14,7 @@ import express, { type Express } from "express";
 import { IInfrastructure, ILedgerEnvironment, IRequestOptions } from "./types";
 import { registerWebServiceEndpoint } from "@hyperledger/cactus-core";
 import { InitiateTransactionEndpointV1 } from "./web-services/initiate-transaction-endpoint";
+import { AcceptTransactionEndpointV1 } from "./web-services/accept-transaction-endpoint";
 import CBDCController from "./core/cbdc-controller";
 import { TransactionStore } from "./store/transaction-store";
 import { ComplianceProvidersStore } from "./store/compliance-providers-store";
@@ -95,6 +96,10 @@ export class PluginCBDCController implements ICactusPlugin {
       registerWebServiceEndpoint(
         this.webApplication,
         new InitiateTransactionEndpointV1(requestOptions),
+      ),
+      registerWebServiceEndpoint(
+        this.webApplication,
+        new AcceptTransactionEndpointV1(requestOptions),
       ),
     ]);
   }

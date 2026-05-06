@@ -12,17 +12,17 @@ import {
 } from "@hyperledger/cactus-core-api";
 
 import { Request, Response, type Express } from "express";
-import { IInitiateTransactionRequest, IRequestOptions } from "../types";
+import { IAcceptTransactionRequest, IRequestOptions } from "../types";
 
-export class InitiateTransactionEndpointV1 implements IWebServiceEndpoint {
-  public static readonly CLASS_NAME = "InitiateTransactionEndpointV1";
+export class AcceptTransactionEndpointV1 implements IWebServiceEndpoint {
+  public static readonly CLASS_NAME = "AcceptTransactionEndpointV1";
 
   private readonly log: Logger;
 
   private readonly options: IRequestOptions;
 
   public get className(): string {
-    return InitiateTransactionEndpointV1.CLASS_NAME;
+    return AcceptTransactionEndpointV1.CLASS_NAME;
   }
 
   constructor(options: IRequestOptions) {
@@ -45,7 +45,7 @@ export class InitiateTransactionEndpointV1 implements IWebServiceEndpoint {
   }
 
   getPath(): string {
-    return "/initiate-transaction";
+    return "/accept-transaction";
   }
 
   getExpressRequestHandler(): IExpressRequestHandler {
@@ -73,22 +73,17 @@ export class InitiateTransactionEndpointV1 implements IWebServiceEndpoint {
   public async handleRequest(req: Request, res: Response): Promise<void> {
     const reqTag = `${this.getVerbLowerCase()} - ${this.getPath()}`;
     this.log.debug(reqTag);
-    const body = req.body as IInitiateTransactionRequest;
+    const body = req.body as IAcceptTransactionRequest;
 
-    this.log.info("Received request to initiate transaction");
+    this.log.info(
+      `Received request to accept transaction with id ${body.transactionId}`,
+    );
 
-    const result = await this.options.controller.initiateTransaction(body);
-
-    if (result.kind === "marked_for_review") {
-      res.status(202).json({
-        transactionId: result.transactionId,
-        status: "MARKED_FOR_REVIEW",
-      });
-      return;
-    }
+    await this.options.controller.acceptTransaction(body.transactionId);
 
     res.status(200).json({
-      transactionId: result.transactionId,
+      transactionId: body.transactionId,
+      status: "COMPLETED",
     });
   }
 }

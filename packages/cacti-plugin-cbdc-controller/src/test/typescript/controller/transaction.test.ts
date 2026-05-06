@@ -1,3 +1,4 @@
+import { describe, expect, it } from "@jest/globals";
 import { LoggerProvider, LogLevelDesc } from "@hyperledger/cactus-common";
 import { InMemoryTransactionStore } from "../../../main/typescript/store/transaction-store";
 import CBDCController from "../../../main/typescript/core/cbdc-controller";
@@ -7,6 +8,7 @@ import { DummyComplianceProvider } from "../../../test/typescript/compliance/dum
 import {
   ComplianceResult,
   ILedgerEnvironment,
+  TransactionStatus,
 } from "../../../main/typescript/types";
 import {
   TokenType,
@@ -169,5 +171,73 @@ describe("Transaction Controller", () => {
     });
 
     await expect(promise).rejects.toThrow();
+  });
+
+  describe("MARKED_FOR_REVIEW handling", () => {
+    let markedTransactionId: string;
+
+    const controller = new CBDCController(
+      transactionStore,
+      new ConstantFxProvisionStrategy(0.5),
+      complianceStoreProvider,
+      {
+        environments: {
+          cbdc_a: cbdc_a_environment,
+          cbdc_b: cbdc_b_environment,
+        },
+      },
+      logLevel,
+    );
+
+    it("should pause without performing SATP transfer when a provider marks for review", async () => {
+      complianceProvider.setNextCheckResponse(
+        ComplianceResult.MARKED_FOR_REVIEW,
+      );
+
+      const result = await controller.initiateTransaction({
+        amount: 100,
+        complianceProviders: ["dummy-compliance-provider"],
+        sourceChainCode: "cbdc_a",
+        destinationChainCode: "cbdc_b",
+        receiverAddress: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+        senderAddress: "0x1234567890abcdef1234567890abcdef12345678",
+        timeToExpire: new Date(Date.now() + 60 * 60 * 1000),
+      });
+
+      expect(result.kind).toBe("marked_for_review");
+      markedTransactionId = result.transactionId;
+
+      const persisted = await transactionStore.get(markedTransactionId);
+      expect(persisted).not.toBeNull();
+      expect(persisted!.status).toBe(TransactionStatus.MARKED_FOR_REVIEW);
+      expect(persisted!.complianceResult).toBe(
+        ComplianceResult.MARKED_FOR_REVIEW,
+      );
+      expect(persisted!.fxRate).toBe(0.5);
+    });
+
+    it("should reject acceptTransaction for an unknown transaction id", async () => {
+      await expect(
+        controller.acceptTransaction("non-existent-id"),
+      ).rejects.toThrow(/not found/);
+    });
+
+    it("should resume and complete a marked-for-review transaction via acceptTransaction", async () => {
+      // The compliance provider's next response is irrelevant on the resume
+      // path — acceptTransaction must not re-run compliance checks.
+      complianceProvider.setNextCheckResponse(ComplianceResult.REJECTED);
+
+      await controller.acceptTransaction(markedTransactionId);
+
+      const persisted = await transactionStore.get(markedTransactionId);
+      expect(persisted!.status).toBe(TransactionStatus.COMPLETED);
+    });
+
+    it("should reject acceptTransaction for a transaction not in MARKED_FOR_REVIEW status", async () => {
+      // markedTransactionId is now COMPLETED from the previous test.
+      await expect(
+        controller.acceptTransaction(markedTransactionId),
+      ).rejects.toThrow(/Cannot accept transaction/);
+    });
   });
 });

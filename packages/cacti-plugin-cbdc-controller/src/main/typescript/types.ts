@@ -34,6 +34,14 @@ export interface IInitiateTransactionRequest {
   complianceProviders: string[];
 }
 
+export type InitiateTransactionResult =
+  | { kind: "completed"; transactionId: string }
+  | { kind: "marked_for_review"; transactionId: string };
+
+export interface IAcceptTransactionRequest {
+  transactionId: string;
+}
+
 export enum ComplianceResult {
   APPROVED,
   REJECTED,
@@ -59,6 +67,7 @@ export enum TransactionStatus {
   PENDING,
   SETTING_FX_RATE,
   COMPLIANCE_CHECKS,
+  MARKED_FOR_REVIEW,
   EXECUTING,
   COMPLETED,
   FAILED,
