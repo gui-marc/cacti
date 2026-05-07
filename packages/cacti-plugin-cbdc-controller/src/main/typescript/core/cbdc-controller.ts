@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import {
   ComplianceResult,
+  IComplianceProvider,
   IGetComplianceCheckResponse,
   IInfrastructure,
   IInitiateTransactionRequest,
@@ -21,6 +22,7 @@ export default class CBDCController {
   private readonly fxProvisionStrategy: FXProvisionStrategy;
   private readonly complianceProvidersStore: ComplianceProvidersStore;
   private readonly infrastructure: IInfrastructure;
+  private readonly expiryTimers: Map<string, NodeJS.Timeout> = new Map();
 
   constructor(
     store: TransactionStore,
@@ -80,25 +82,7 @@ export default class CBDCController {
       });
     }
 
-    let complianceResult: ComplianceResult;
-    try {
-      complianceResult = await this.requestComplianceChecks(transactionID);
-    } catch (error) {
-      await this.fxProvisionStrategy.releaseLiquidity(
-        req.sourceChainCode,
-        req.destinationChainCode,
-        req.amount,
-      );
-
-      await this.store.update(transactionID, {
-        ...transaction,
-        status: TransactionStatus.FAILED,
-      });
-
-      throw new Error(`Error while requesting FX quote for transaction:`, {
-        cause: error,
-      });
-    }
+    const complianceResult = await this.requestComplianceChecks(transactionID);
 
     const persisted = await this.store.get(transactionID);
     if (!persisted) {
@@ -125,6 +109,7 @@ export default class CBDCController {
         ...persisted,
         status: TransactionStatus.MARKED_FOR_REVIEW,
       });
+      this.scheduleExpiry(transactionID, persisted.timeToExpire);
       return { kind: "marked_for_review", transactionId: transactionID };
     }
 
@@ -143,7 +128,61 @@ export default class CBDCController {
         `Cannot accept transaction ${transactionId} in status ${transaction.status}`,
       );
     }
+    if (Date.now() >= transaction.timeToExpire.getTime()) {
+      await this.expireTransaction(transactionId);
+      throw new Error(`Transaction ${transactionId} has expired`);
+    }
+    this.clearExpiry(transactionId);
     await this.executeTransfer(transaction);
+  }
+
+  private scheduleExpiry(transactionId: string, timeToExpire: Date): void {
+    const delayMs = timeToExpire.getTime() - Date.now();
+    if (delayMs <= 0) {
+      void this.expireTransaction(transactionId);
+      return;
+    }
+    const timer = setTimeout(() => {
+      void this.expireTransaction(transactionId);
+    }, delayMs);
+    timer.unref();
+    this.expiryTimers.set(transactionId, timer);
+  }
+
+  private clearExpiry(transactionId: string): void {
+    const timer = this.expiryTimers.get(transactionId);
+    if (timer) {
+      clearTimeout(timer);
+      this.expiryTimers.delete(transactionId);
+    }
+  }
+
+  private async expireTransaction(transactionId: string): Promise<void> {
+    this.clearExpiry(transactionId);
+    const transaction = await this.store.get(transactionId);
+    if (!transaction) {
+      return;
+    }
+    if (transaction.status !== TransactionStatus.MARKED_FOR_REVIEW) {
+      return;
+    }
+    try {
+      await this.fxProvisionStrategy.releaseLiquidity(
+        transaction.sourceChainCode,
+        transaction.destinationChainCode,
+        transaction.amount,
+      );
+    } catch (error) {
+      this.log.error(
+        `Error releasing liquidity for expired transaction ${transactionId}`,
+        error,
+      );
+    }
+    await this.store.update(transactionId, {
+      ...transaction,
+      status: TransactionStatus.EXPIRED,
+    });
+    this.log.info(`Transaction ${transactionId} expired`);
   }
 
   private async executeTransfer(transaction: ITransaction): Promise<void> {
@@ -217,7 +256,19 @@ export default class CBDCController {
       );
     }
 
-    const complianceProviders = await this.complianceProvidersStore.getAll();
+    const complianceProviders: IComplianceProvider[] = [];
+    await Promise.all(
+      transaction.complianceProviders.map(async (providerId) => {
+        const provider = await this.complianceProvidersStore.get(providerId);
+        if (!provider) {
+          this.log.warn(
+            `Compliance provider with id ${providerId} not found, skipping`,
+          );
+          return;
+        }
+        complianceProviders.push(provider);
+      }),
+    );
 
     const results = await Promise.all(
       complianceProviders.map(async (provider) => {

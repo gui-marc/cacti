@@ -1,4 +1,4 @@
-import { describe, expect, it } from "@jest/globals";
+import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { LoggerProvider, LogLevelDesc } from "@hyperledger/cactus-common";
 import { InMemoryTransactionStore } from "../../../main/typescript/store/transaction-store";
 import CBDCController from "../../../main/typescript/core/cbdc-controller";
@@ -238,6 +238,103 @@ describe("Transaction Controller", () => {
       await expect(
         controller.acceptTransaction(markedTransactionId),
       ).rejects.toThrow(/Cannot accept transaction/);
+    });
+  });
+
+  describe("auto-expire on timeToExpire", () => {
+    const fxStrategy = new ConstantFxProvisionStrategy(0.5);
+    const releaseSpy = jest.spyOn(fxStrategy, "releaseLiquidity");
+
+    const controller = new CBDCController(
+      transactionStore,
+      fxStrategy,
+      complianceStoreProvider,
+      {
+        environments: {
+          cbdc_a: cbdc_a_environment,
+          cbdc_b: cbdc_b_environment,
+        },
+      },
+      logLevel,
+    );
+
+    beforeEach(() => {
+      releaseSpy.mockClear();
+    });
+
+    it("transitions a MARKED_FOR_REVIEW transaction to EXPIRED when the deadline elapses", async () => {
+      complianceProvider.setNextCheckResponse(
+        ComplianceResult.MARKED_FOR_REVIEW,
+      );
+
+      const result = await controller.initiateTransaction({
+        amount: 100,
+        complianceProviders: ["dummy-compliance-provider"],
+        sourceChainCode: "cbdc_a",
+        destinationChainCode: "cbdc_b",
+        receiverAddress: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+        senderAddress: "0x1234567890abcdef1234567890abcdef12345678",
+        timeToExpire: new Date(Date.now() + 300),
+      });
+      expect(result.kind).toBe("marked_for_review");
+
+      // Sleep for 600 ms
+      await new Promise((resolve) => setTimeout(resolve, 600));
+
+      const persisted = await transactionStore.get(result.transactionId);
+      expect(persisted!.status).toBe(TransactionStatus.EXPIRED);
+      expect(releaseSpy).toHaveBeenCalledTimes(1);
+      expect(releaseSpy).toHaveBeenCalledWith("cbdc_a", "cbdc_b", 100);
+    });
+
+    it("clears the expiry timer when accepted before the deadline", async () => {
+      complianceProvider.setNextCheckResponse(
+        ComplianceResult.MARKED_FOR_REVIEW,
+      );
+
+      const result = await controller.initiateTransaction({
+        amount: 100,
+        complianceProviders: ["dummy-compliance-provider"],
+        sourceChainCode: "cbdc_a",
+        destinationChainCode: "cbdc_b",
+        receiverAddress: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+        senderAddress: "0x1234567890abcdef1234567890abcdef12345678",
+        timeToExpire: new Date(Date.now() + 300),
+      });
+
+      await controller.acceptTransaction(result.transactionId);
+
+      // Wait past the original deadline; the cleared timer must not fire.
+      await new Promise((resolve) => setTimeout(resolve, 600));
+
+      const persisted = await transactionStore.get(result.transactionId);
+      expect(persisted!.status).toBe(TransactionStatus.COMPLETED);
+      expect(releaseSpy).not.toHaveBeenCalled();
+    });
+
+    it("rejects acceptTransaction when the deadline has already passed", async () => {
+      const transactionId = "manually-staged-expired-tx";
+      await transactionStore.save({
+        id: transactionId,
+        sourceChainCode: "cbdc_a",
+        destinationChainCode: "cbdc_b",
+        senderAddress: "0x1234567890abcdef1234567890abcdef12345678",
+        receiverAddress: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+        amount: 100,
+        timeToExpire: new Date(Date.now() - 1000),
+        status: TransactionStatus.MARKED_FOR_REVIEW,
+        complianceProviders: ["dummy-compliance-provider"],
+        complianceResult: ComplianceResult.MARKED_FOR_REVIEW,
+        fxRate: 0.5,
+      });
+
+      await expect(controller.acceptTransaction(transactionId)).rejects.toThrow(
+        /has expired/,
+      );
+
+      const persisted = await transactionStore.get(transactionId);
+      expect(persisted!.status).toBe(TransactionStatus.EXPIRED);
+      expect(releaseSpy).toHaveBeenCalledTimes(1);
     });
   });
 });

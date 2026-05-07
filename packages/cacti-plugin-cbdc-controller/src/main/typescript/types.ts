@@ -71,6 +71,7 @@ export enum TransactionStatus {
   EXECUTING,
   COMPLETED,
   FAILED,
+  EXPIRED,
 }
 
 export interface ITransaction {
