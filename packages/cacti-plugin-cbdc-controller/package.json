@@ -60,6 +60,7 @@
     "@hyperledger/cactus-test-geth-ledger": "workspace:^",
     "@hyperledger/cactus-test-tooling": "workspace:^",
     "@jest/globals": "^30.3.0",
+    "@metamask/eth-sig-util": "^7.0.3",
     "@openzeppelin/contracts": "5.0.2",
     "@types/cors": "^2",
     "@types/dockerode": "^4",
