@@ -7653,6 +7653,7 @@ __metadata:
     "@hyperledger/cactus-test-tooling": "workspace:^"
     "@jest/globals": "npm:^30.3.0"
     "@metamask/eth-sig-util": "npm:^7.0.3"
+    "@openapitools/openapi-generator-cli": "npm:2.7.0"
     "@openzeppelin/contracts": "npm:5.0.2"
     "@types/cors": "npm:^2"
     "@types/dockerode": "npm:^4"
@@ -7670,6 +7671,7 @@ __metadata:
     jest: "npm:^30.3.0"
     jest-util: "npm:^30.3.0"
     knex: "npm:2.4.0"
+    npm-run-all: "npm:4.1.5"
     pg: "npm:^8.20.0"
     prettier: "npm:^3.8.1"
     sqlite3: "npm:^6.0.1"
@@ -24531,6 +24533,12 @@ __metadata:
   languageName: node
   linkType: hard
 
+"cacti-example-cbdc-backend@workspace:examples/cacti-example-cbdc-backend":
+  version: 0.0.0-use.local
+  resolution: "cacti-example-cbdc-backend@workspace:examples/cacti-example-cbdc-backend"
+  languageName: unknown
+  linkType: soft
+
 "cacti-example-cbdc-frontend@workspace:examples/cacti-example-cbdc-frontend":
   version: 0.0.0-use.local
   resolution: "cacti-example-cbdc-frontend@workspace:examples/cacti-example-cbdc-frontend"
@@ -24557,7 +24565,7 @@ __metadata:
     prettier-plugin-tailwindcss: "npm:^0.7.2"
     react: "npm:^19.2.4"
     react-dom: "npm:^19.2.4"
-    react-hook-form: "npm:^7.75.0"
+    react-hook-form: "npm:^7.76.0"
     react-router: "npm:^7.15.0"
     shadcn: "npm:^4.7.0"
     tailwind-merge: "npm:^3.6.0"
@@ -50230,12 +50238,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-hook-form@npm:^7.75.0":
-  version: 7.75.0
-  resolution: "react-hook-form@npm:7.75.0"
+"react-hook-form@npm:^7.76.0":
+  version: 7.76.0
+  resolution: "react-hook-form@npm:7.76.0"
   peerDependencies:
     react: ^16.8.0 || ^17 || ^18 || ^19
-  checksum: 10/c6431d401f6e9a49a32dc7005924c87017960a5da961c713f32d2eb0ad00d094bb3bd21439326753e775d33d1ea7bf73a0b6f315607ca49eea0563dac703c989
+  checksum: 10/5561707e200bc1031de407e0f7b9e3625444eaeef91765182e7387654853d65314498db0dd2e290fead147453c5f42df6359ea16c674de2034cbb2a6327dcae2
   languageName: node
   linkType: hard
 

@@ -1,0 +1,217 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Hyperledger Cacti Plugin - CBDC Interoperability Controller",
+    "description": "OpenAPI specification for the CBDC Interoperability Controller plugin. Exposes endpoints to initiate and accept cross-ledger CBDC transactions.",
+    "version": "0.0.1",
+    "license": {
+      "name": "Apache-2.0",
+      "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
+    }
+  },
+  "components": {
+    "schemas": {
+      "InitiateTransactionRequest": {
+        "type": "object",
+        "description": "Request body for initiating a cross-ledger CBDC transaction.",
+        "required": [
+          "sourceChainCode",
+          "destinationChainCode",
+          "senderAddress",
+          "receiverAddress",
+          "amount",
+          "timeToExpire",
+          "complianceProviders"
+        ],
+        "properties": {
+          "sourceChainCode": {
+            "type": "string",
+            "description": "Identifier of the source ledger / chain."
+          },
+          "destinationChainCode": {
+            "type": "string",
+            "description": "Identifier of the destination ledger / chain."
+          },
+          "senderAddress": {
+            "type": "string",
+            "description": "Address of the sender on the source chain."
+          },
+          "receiverAddress": {
+            "type": "string",
+            "description": "Address of the receiver on the destination chain."
+          },
+          "amount": {
+            "type": "number",
+            "description": "Amount of CBDC to transfer, denominated in the source asset."
+          },
+          "timeToExpire": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO-8601 timestamp after which the transaction is considered expired."
+          },
+          "complianceProviders": {
+            "type": "array",
+            "description": "Identifiers of compliance providers that must approve the transaction.",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "InitiateTransactionResponse": {
+        "type": "object",
+        "description": "Response returned when an initiate-transaction request is accepted.",
+        "required": ["transactionId"],
+        "properties": {
+          "transactionId": {
+            "type": "string",
+            "description": "Unique identifier of the created transaction."
+          },
+          "status": {
+            "type": "string",
+            "description": "Optional status indicator. Present when the transaction requires manual review.",
+            "enum": ["MARKED_FOR_REVIEW"]
+          }
+        }
+      },
+      "AcceptTransactionRequest": {
+        "type": "object",
+        "description": "Request body for accepting a previously initiated transaction.",
+        "required": ["transactionId"],
+        "properties": {
+          "transactionId": {
+            "type": "string",
+            "description": "Identifier of the transaction to accept."
+          }
+        }
+      },
+      "AcceptTransactionResponse": {
+        "type": "object",
+        "description": "Response returned when an accept-transaction request completes.",
+        "required": ["transactionId", "status"],
+        "properties": {
+          "transactionId": {
+            "type": "string",
+            "description": "Identifier of the accepted transaction."
+          },
+          "status": {
+            "type": "string",
+            "description": "Final status of the accepted transaction.",
+            "enum": ["COMPLETED"]
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "description": "Generic error response.",
+        "properties": {
+          "message": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/api/v1/plugins/@hyperledger-cacti/cacti-plugin-cbdc-controller/initiate-transaction": {
+      "post": {
+        "operationId": "initiateTransactionV1",
+        "summary": "Initiate a cross-ledger CBDC transaction.",
+        "description": "Submits a new CBDC transaction request to the controller for compliance evaluation and execution.",
+        "tags": ["transactions"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InitiateTransactionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Transaction created and accepted for processing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InitiateTransactionResponse"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Transaction created but marked for manual review.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InitiateTransactionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request payload.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/plugins/@hyperledger-cacti/cacti-plugin-cbdc-controller/accept-transaction": {
+      "post": {
+        "operationId": "acceptTransactionV1",
+        "summary": "Accept a transaction previously marked for review.",
+        "description": "Confirms a transaction so the controller proceeds with execution.",
+        "tags": ["transactions"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptTransactionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Transaction accepted and executed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcceptTransactionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request payload.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Transaction not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,3 +1,4 @@
+import { describe, expect, it, afterAll } from "@jest/globals";
 import { ComplianceResult } from "../../../main/typescript/types";
 import { DummyComplianceProvider } from "./dummy-compliance-provider";
 
