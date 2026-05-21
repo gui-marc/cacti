@@ -1,6 +1,7 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
+    "ignoreDeprecations": "5.0",
     "composite": true,
     "outDir": "./dist/lib/",
     "declarationDir": "dist/lib",
@@ -11,8 +12,9 @@
       "@test/*": ["./src/test/typescript/*"]
     },
     "resolveJsonModule": true,
-    "types": ["jest", "@types/jest"]
+    "types": ["jest"]
   },
-  "include": ["./**/*.{ts,json,sol}"],
+  "include": ["./src", "src/**/*.json"],
+  "exclude": ["**/*.test.ts"],
   "references": []
 }

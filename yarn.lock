@@ -7635,7 +7635,15 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@hyperledger-cacti/cacti-plugin-cbdc-controller@workspace:packages/cacti-plugin-cbdc-controller":
+"@hyperledger-cacti/cacti-example-cbdc-backend@workspace:examples/cacti-example-cbdc-backend":
+  version: 0.0.0-use.local
+  resolution: "@hyperledger-cacti/cacti-example-cbdc-backend@workspace:examples/cacti-example-cbdc-backend"
+  dependencies:
+    "@hyperledger-cacti/cacti-plugin-cbdc-controller": "workspace:^"
+  languageName: unknown
+  linkType: soft
+
+"@hyperledger-cacti/cacti-plugin-cbdc-controller@workspace:^, @hyperledger-cacti/cacti-plugin-cbdc-controller@workspace:packages/cacti-plugin-cbdc-controller":
   version: 0.0.0-use.local
   resolution: "@hyperledger-cacti/cacti-plugin-cbdc-controller@workspace:packages/cacti-plugin-cbdc-controller"
   dependencies:
@@ -24532,12 +24540,6 @@ __metadata:
   checksum: 10/7e7ca628511ab18c86eea1231834d2591de29a13ae771a7d9ab85be8c6e53e45c5a5b0d0d95d4a3274fc4f26c16956a98162e40c191c131204b5d5aa949660b5
   languageName: node
   linkType: hard
-
-"cacti-example-cbdc-backend@workspace:examples/cacti-example-cbdc-backend":
-  version: 0.0.0-use.local
-  resolution: "cacti-example-cbdc-backend@workspace:examples/cacti-example-cbdc-backend"
-  languageName: unknown
-  linkType: soft
 
 "cacti-example-cbdc-frontend@workspace:examples/cacti-example-cbdc-frontend":
   version: 0.0.0-use.local

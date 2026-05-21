@@ -43,17 +43,28 @@
   "main": "dist/lib/main/typescript/index.js",
   "module": "dist/lib/main/typescript/index.js",
   "types": "dist/lib/main/typescript/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/lib/main/typescript/index.d.ts",
+      "default": "./dist/lib/main/typescript/index.js"
+    }
+  },
   "files": [
-    "dist/*"
+    "dist/lib/main/**/*",
+    "dist/lib/test/typescript/dummy-environment/**/*",
+    "dist/lib/test/typescript/fx-provision/**/*",
+    "dist/lib/test/typescript/compliance/**/*"
   ],
   "scripts": {
+    "build": "run-s codegen tsc",
     "test": "jest  ./src/test/typescript",
     "lint": "eslint --config ./eslint.config.mjs '**/*.{js,ts}' --quiet --fix",
     "forge:build:test": "forge build ./src/test/solidity/contracts/*.sol --out ./src/test/solidity/generated",
     "codegen": "run-p 'codegen:*'",
     "codegen:openapi": "run-s generate-sdk",
     "generate-sdk": "run-s 'generate-sdk:*'",
-    "generate-sdk:typescript-axios": "openapi-generator-cli generate -i ./src/main/json/openapi.json -g typescript-axios -o ./src/main/typescript/generated/openapi/typescript-axios/ --reserved-words-mappings protected=protected --enable-post-process-file"
+    "generate-sdk:typescript-axios": "openapi-generator-cli generate -i ./src/main/json/openapi.json -g typescript-axios -o ./src/main/typescript/generated/openapi/typescript-axios/ --reserved-words-mappings protected=protected --enable-post-process-file",
+    "tsc": "tsc --project ./tsconfig.json"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
