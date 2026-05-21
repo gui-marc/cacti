@@ -10,7 +10,7 @@ export default class ConstantFxProvisionStrategy extends FXProvisionStrategy {
     super();
   }
 
-  getFXQuoteAndLockLiquidity(
+  requestFXQuote(
     baseCurrency: string,
     destinationCurrency: string,
     amount: number,

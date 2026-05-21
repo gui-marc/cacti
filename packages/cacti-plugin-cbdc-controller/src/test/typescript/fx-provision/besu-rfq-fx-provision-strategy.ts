@@ -25,7 +25,7 @@ export class BesuRFQFXProvisionStrategy extends FXProvisionStrategy {
     this.takerAccount = options.takerAccount;
   }
 
-  async getFXQuoteAndLockLiquidity(
+  async requestFXQuote(
     baseCurrency: string,
     destinationCurrency: string,
     amount: number,

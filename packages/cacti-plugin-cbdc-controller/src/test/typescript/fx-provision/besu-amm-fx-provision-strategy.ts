@@ -24,7 +24,7 @@ export class BesuAMMFXProvisionStrategy extends FXProvisionStrategy {
     this.recipient = options.recipient;
   }
 
-  async getFXQuoteAndLockLiquidity(
+  async requestFXQuote(
     baseCurrency: string,
     destinationCurrency: string,
     amount: number,

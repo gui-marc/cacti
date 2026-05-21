@@ -12,7 +12,7 @@ export type DynamicRange =
   | { min: number; max: number };
 
 export abstract class FXProvisionStrategy {
-  abstract getFXQuoteAndLockLiquidity(
+  abstract requestFXQuote(
     baseCurrency: string,
     destinationCurrency: string,
     amount: number,

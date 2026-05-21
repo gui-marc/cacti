@@ -22,6 +22,7 @@ export default class CBDCController {
   private readonly fxProvisionStrategy: FXProvisionStrategy;
   private readonly complianceProvidersStore: ComplianceProvidersStore;
   private readonly infrastructure: IInfrastructure;
+  // TODO: Crash recovery mechanism to handle server restarts and ensure pending transactions are not lost
   private readonly expiryTimers: Map<string, NodeJS.Timeout> = new Map();
 
   constructor(
@@ -223,13 +224,13 @@ export default class CBDCController {
   private async requestTransactionFXRate(
     transaction: ITransaction,
   ): Promise<void> {
-    const quote = await this.fxProvisionStrategy.getFXQuoteAndLockLiquidity(
+    const quote = await this.fxProvisionStrategy.requestFXQuote(
       transaction.sourceChainCode,
       transaction.destinationChainCode,
       transaction.amount,
       {
         // TODO: these limits should be defined based on the transaction details and not hardcoded
-        min: 0,
+        min: Number.MIN_SAFE_INTEGER,
         max: Number.MAX_SAFE_INTEGER,
       },
     );
