@@ -55,7 +55,8 @@ import { createMigrationSource } from "@hyperledger/cactus-plugin-satp-hermes/sr
 import { knexLocalInstance } from "@hyperledger/cactus-plugin-satp-hermes/src/main/typescript/database/knexfile";
 import { knexRemoteInstance } from "@hyperledger/cactus-plugin-satp-hermes/src/main/typescript/database/knexfile-remote";
 import { randomUUID } from "crypto";
-import { InMemoryComplianceProvidersStore } from "../../../main/typescript/store/compliance-providers-store";
+import { InMemoryPartnersStore } from "../../../main/typescript/store/partners-store";
+import { InMemoryComplianceEndpointsStore } from "../../../main/typescript/store/compliance-endpoints-store";
 import { InMemoryTransactionStore } from "../../../main/typescript/store/transaction-store";
 import { ILedgerEnvironment } from "../../../main/typescript/types";
 import { BesuRFQFXProvisionStrategy } from "../fx-provision/besu-rfq-fx-provision-strategy";
@@ -64,7 +65,7 @@ import {
   DummyBesuRFQEnvironment,
 } from "../fx-provision/besu-rfq";
 import { DummyComplianceProvider } from "../compliance/dummy-compliance-provider";
-import { generateComplianceProviderSecret } from "../../../main/typescript/core/compliance-signing";
+import { generatePartnerSecret } from "../../../main/typescript/core/partner-signing";
 import SATPTokenContract from "../../solidity/generated/SATPTokenContract.sol/SATPTokenContract.json";
 
 const logLevel: LogLevelDesc = "DEBUG";
@@ -79,7 +80,12 @@ const monitorService = MonitorService.createOrGetMonitorService({
 const SOURCE_CHAIN_CODE = "besu";
 const DESTINATION_CHAIN_CODE = "ethereum";
 const COMPLIANCE_PROVIDER_PORT = 3030;
-const COMPLIANCE_PROVIDER_SECRET = generateComplianceProviderSecret();
+const CONTROLLER_ID = "besu-rfq-test-controller";
+const INITIATOR_PARTNER_ID = "besu-rfq-test-initiator";
+const INITIATOR_SECRET = generatePartnerSecret();
+const COMPLIANCE_PARTNER_ID = "besu-rfq-test-compliance-bank";
+const COMPLIANCE_ENDPOINT_ID = "besu-rfq-test-compliance-endpoint";
+const COMPLIANCE_PROVIDER_SECRET = generatePartnerSecret();
 const RATE_NUM = 4n;
 const RATE_DEN = 5n;
 
@@ -290,7 +296,9 @@ beforeAll(async () => {
 
   complianceProvider = new DummyComplianceProvider({
     port: COMPLIANCE_PROVIDER_PORT,
+    partnerId: COMPLIANCE_PARTNER_ID,
     apiKey: COMPLIANCE_PROVIDER_SECRET,
+    controllerId: CONTROLLER_ID,
   });
   await complianceProvider.start();
 }, TIMEOUT);
@@ -388,22 +396,33 @@ describe("CBDC controller using BesuRFQFXProvisionStrategy", () => {
         takerAccount: rfqEnv.ownerAccount,
       });
 
-      const complianceProvidersStore = new InMemoryComplianceProvidersStore();
-      const complianceProviderId = randomUUID();
-      await complianceProvidersStore.save({
-        id: complianceProviderId,
-        endpoint: complianceProvider.getEndpointUrl(),
+      const partnersStore = new InMemoryPartnersStore();
+      await partnersStore.save({
+        id: INITIATOR_PARTNER_ID,
+        apiKey: INITIATOR_SECRET,
+      });
+      await partnersStore.save({
+        id: COMPLIANCE_PARTNER_ID,
         apiKey: COMPLIANCE_PROVIDER_SECRET,
+      });
+      const complianceEndpointsStore = new InMemoryComplianceEndpointsStore();
+      await complianceEndpointsStore.save({
+        id: COMPLIANCE_ENDPOINT_ID,
+        partnerId: COMPLIANCE_PARTNER_ID,
+        url: complianceProvider.getEndpointUrl(),
       });
 
       const cbdcPlugin = await cbdcFactory.create({
         instanceId: "test-instance",
-        complianceProvidersStore,
+        controllerId: CONTROLLER_ID,
+        partnersStore,
+        complianceEndpointsStore,
         fxProvisionStrategy,
         transactionStore: new InMemoryTransactionStore(),
         environments: { besu: besuCBDCEnv, ethereum: ethereumCBDCEnv },
         logLevel,
         requireHttps: false,
+        requireClientAuth: false,
       });
       await cbdcPlugin.onPluginInit();
 
@@ -463,7 +482,8 @@ describe("CBDC controller using BesuRFQFXProvisionStrategy", () => {
 
       await cbdcController.initiateTransaction({
         amount: amountIn,
-        complianceProviders: [complianceProviderId],
+        initiatorId: INITIATOR_PARTNER_ID,
+        complianceProviders: [COMPLIANCE_ENDPOINT_ID],
         destinationChainCode: DESTINATION_CHAIN_CODE,
         senderAddress: besuEnv.getTestOwnerAccount(),
         receiverAddress: ethereumEnv.getTestOwnerAccount(),

@@ -17,16 +17,21 @@ import { InitiateTransactionEndpointV1 } from "./web-services/initiate-transacti
 import { AcceptTransactionEndpointV1 } from "./web-services/accept-transaction-endpoint";
 import CBDCController from "./core/cbdc-controller";
 import { TransactionStore } from "./store/transaction-store";
-import { ComplianceProvidersStore } from "./store/compliance-providers-store";
+import { PartnersStore } from "./store/partners-store";
+import { ComplianceEndpointsStore } from "./store/compliance-endpoints-store";
 import { FXProvisionStrategy } from "./core/fx-provision";
+import { PartnerSecurityService } from "./core/partner-security-service";
 
 export interface IPluginCBDCOptions extends ICactusPluginOptions {
+  controllerId: string;
   logLevel?: LogLevelDesc;
   environments: Record<string, ILedgerEnvironment>;
   transactionStore: TransactionStore;
   fxProvisionStrategy: FXProvisionStrategy;
-  complianceProvidersStore: ComplianceProvidersStore;
+  partnersStore: PartnersStore;
+  complianceEndpointsStore: ComplianceEndpointsStore;
   requireHttps?: boolean;
+  requireClientAuth?: boolean;
 }
 
 export class PluginCBDCController implements ICactusPlugin {
@@ -37,12 +42,19 @@ export class PluginCBDCController implements ICactusPlugin {
   private readonly log: Logger;
   private readonly options: IPluginCBDCOptions;
   private readonly controller: CBDCController;
+  private readonly partnerSecurityService: PartnerSecurityService;
+  private readonly requireClientAuth: boolean;
 
   private webApplication: Express;
 
   private infrastructure: IInfrastructure;
 
   constructor(options: IPluginCBDCOptions) {
+    if (!options.controllerId) {
+      throw new Error(
+        "IPluginCBDCOptions.controllerId is required so the controller can identify itself in signed messages",
+      );
+    }
     this.logLevel = options.logLevel || "INFO";
     this.log = LoggerProvider.getOrCreate({
       level: this.logLevel,
@@ -50,20 +62,27 @@ export class PluginCBDCController implements ICactusPlugin {
     });
     this.options = options;
     this.instanceId = this.options.instanceId;
+    this.requireClientAuth = this.options.requireClientAuth ?? true;
     this.webApplication = express();
 
     this.infrastructure = {
       environments: this.options.environments,
     };
 
-    this.controller = new CBDCController(
-      this.options.transactionStore,
-      this.options.fxProvisionStrategy,
-      this.options.complianceProvidersStore,
-      this.infrastructure,
-      this.logLevel,
-      { requireHttps: this.options.requireHttps },
-    );
+    this.partnerSecurityService = new PartnerSecurityService({
+      controllerId: this.options.controllerId,
+      partnersStore: this.options.partnersStore,
+    });
+
+    this.controller = new CBDCController({
+      transactionStore: this.options.transactionStore,
+      fxProvisionStrategy: this.options.fxProvisionStrategy,
+      complianceEndpointsStore: this.options.complianceEndpointsStore,
+      partnerSecurityService: this.partnerSecurityService,
+      infrastructure: this.infrastructure,
+      logLevel: this.logLevel,
+      requireHttps: this.options.requireHttps,
+    });
   }
 
   getInstanceId(): string {
@@ -78,6 +97,10 @@ export class PluginCBDCController implements ICactusPlugin {
     return this.controller;
   }
 
+  getPartnerSecurityService() {
+    return this.partnerSecurityService;
+  }
+
   async onPluginInit(): Promise<unknown> {
     await this.createWebServices();
     return;
@@ -89,11 +112,13 @@ export class PluginCBDCController implements ICactusPlugin {
     this.webApplication.use(express.json({ limit: "250mb" }));
     this.webApplication.use(cors());
 
-    const requestOptions = {
+    const requestOptions: IRequestOptions = {
       infrastructure: this.infrastructure,
       logLevel: this.logLevel,
       controller: this.controller,
-    } as IRequestOptions;
+      partnerSecurityService: this.partnerSecurityService,
+      requireClientAuth: this.requireClientAuth,
+    };
 
     await Promise.all([
       registerWebServiceEndpoint(

@@ -13,6 +13,7 @@ import {
 
 import { Request, Response, type Express } from "express";
 import { IAcceptTransactionRequest, IRequestOptions } from "../types";
+import { sendSignedJson, verifyClientEnvelope } from "./envelope-verifier";
 
 export class AcceptTransactionEndpointV1 implements IWebServiceEndpoint {
   public static readonly CLASS_NAME = "AcceptTransactionEndpointV1";
@@ -31,6 +32,10 @@ export class AcceptTransactionEndpointV1 implements IWebServiceEndpoint {
     Checks.truthy(
       options.infrastructure,
       `${fnTag} arg options.infrastructure`,
+    );
+    Checks.truthy(
+      options.partnerSecurityService,
+      `${fnTag} arg options.partnerSecurityService`,
     );
 
     const level = options.logLevel || "INFO";
@@ -73,17 +78,52 @@ export class AcceptTransactionEndpointV1 implements IWebServiceEndpoint {
   public async handleRequest(req: Request, res: Response): Promise<void> {
     const reqTag = `${this.getVerbLowerCase()} - ${this.getPath()}`;
     this.log.debug(reqTag);
-    const body = req.body as IAcceptTransactionRequest;
+
+    const verifierOptions = {
+      partnerSecurityService: this.options.partnerSecurityService,
+      requireClientAuth: this.options.requireClientAuth,
+      log: this.log,
+    };
+
+    const call = await verifyClientEnvelope<IAcceptTransactionRequest>(
+      req,
+      res,
+      verifierOptions,
+    );
+    if (!call) {
+      return;
+    }
+
+    const actorId =
+      call.partnerId ?? this.options.partnerSecurityService.getControllerId();
 
     this.log.info(
-      `Received request to accept transaction with id ${body.transactionId}`,
+      `Received request from partner ${actorId} to accept transaction with id ${call.payload.transactionId}`,
     );
 
-    await this.options.controller.acceptTransaction(body.transactionId);
+    try {
+      await this.options.controller.acceptTransaction(
+        call.payload.transactionId,
+        actorId,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (/is not the initiator/.test(message)) {
+        res.status(403).json({ error: message });
+        return;
+      }
+      throw error;
+    }
 
-    res.status(200).json({
-      transactionId: body.transactionId,
-      status: "COMPLETED",
-    });
+    await sendSignedJson(
+      res,
+      200,
+      {
+        transactionId: call.payload.transactionId,
+        status: "COMPLETED",
+      },
+      call,
+      verifierOptions,
+    );
   }
 }

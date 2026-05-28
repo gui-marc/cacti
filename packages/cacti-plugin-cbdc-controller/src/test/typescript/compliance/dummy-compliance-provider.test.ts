@@ -3,10 +3,10 @@ import axios from "axios";
 import { ComplianceResult } from "../../../main/typescript/types";
 import {
   ISignedEnvelope,
-  generateComplianceProviderSecret,
+  generatePartnerSecret,
   signRequest,
   verifyResponse,
-} from "../../../main/typescript/core/compliance-signing";
+} from "../../../main/typescript/core/partner-signing";
 import { DummyComplianceProvider } from "./dummy-compliance-provider";
 
 interface IComplianceResponse {
@@ -15,15 +15,19 @@ interface IComplianceResponse {
 }
 
 describe("Dummy Compliance Provider", () => {
-  const secret = generateComplianceProviderSecret();
+  const controllerId = "test-controller";
+  const partnerId = "test-bank";
+  const secret = generatePartnerSecret();
   const provider = new DummyComplianceProvider({
     port: 3000,
+    partnerId,
     apiKey: secret,
+    controllerId,
     nextCheckResponse: ComplianceResult.APPROVED,
   });
 
   const sendSigned = async (txId: string) => {
-    const { envelope, nonce } = signRequest(secret, {
+    const { envelope, nonce } = signRequest(controllerId, secret, {
       transactionId: txId,
       sourceChainCode: "a",
       destinationChainCode: "b",
@@ -35,7 +39,12 @@ describe("Dummy Compliance Provider", () => {
       provider.getEndpointUrl(),
       envelope,
     );
-    return verifyResponse<IComplianceResponse>(secret, nonce, http.data);
+    return verifyResponse<IComplianceResponse>(
+      partnerId,
+      secret,
+      nonce,
+      http.data,
+    );
   };
 
   it("should be able to start", async () => {
@@ -61,9 +70,23 @@ describe("Dummy Compliance Provider", () => {
   });
 
   it("rejects a request signed with the wrong secret", async () => {
-    const wrong = generateComplianceProviderSecret();
-    const { envelope } = signRequest(wrong, {
+    const wrong = generatePartnerSecret();
+    const { envelope } = signRequest(controllerId, wrong, {
       transactionId: "tx-4",
+      sourceChainCode: "a",
+      destinationChainCode: "b",
+      senderAddress: "0xa",
+      receiverAddress: "0xb",
+      amount: 1,
+    });
+    await expect(
+      axios.post(provider.getEndpointUrl(), envelope),
+    ).rejects.toMatchObject({ response: { status: 401 } });
+  });
+
+  it("rejects a request signed by a sender other than the configured controllerId", async () => {
+    const { envelope } = signRequest("not-the-controller", secret, {
+      transactionId: "tx-5",
       sourceChainCode: "a",
       destinationChainCode: "b",
       senderAddress: "0xa",

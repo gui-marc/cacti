@@ -13,6 +13,7 @@ import {
 
 import { Request, Response, type Express } from "express";
 import { IInitiateTransactionRequest, IRequestOptions } from "../types";
+import { sendSignedJson, verifyClientEnvelope } from "./envelope-verifier";
 
 export class InitiateTransactionEndpointV1 implements IWebServiceEndpoint {
   public static readonly CLASS_NAME = "InitiateTransactionEndpointV1";
@@ -31,6 +32,10 @@ export class InitiateTransactionEndpointV1 implements IWebServiceEndpoint {
     Checks.truthy(
       options.infrastructure,
       `${fnTag} arg options.infrastructure`,
+    );
+    Checks.truthy(
+      options.partnerSecurityService,
+      `${fnTag} arg options.partnerSecurityService`,
     );
 
     const level = options.logLevel || "INFO";
@@ -73,22 +78,41 @@ export class InitiateTransactionEndpointV1 implements IWebServiceEndpoint {
   public async handleRequest(req: Request, res: Response): Promise<void> {
     const reqTag = `${this.getVerbLowerCase()} - ${this.getPath()}`;
     this.log.debug(reqTag);
-    const body = req.body as IInitiateTransactionRequest;
 
-    this.log.info("Received request to initiate transaction");
+    const verifierOptions = {
+      partnerSecurityService: this.options.partnerSecurityService,
+      requireClientAuth: this.options.requireClientAuth,
+      log: this.log,
+    };
 
-    const result = await this.options.controller.initiateTransaction(body);
-
-    if (result.kind === "marked_for_review") {
-      res.status(202).json({
-        transactionId: result.transactionId,
-        status: "MARKED_FOR_REVIEW",
-      });
+    const call = await verifyClientEnvelope<IInitiateTransactionRequest>(
+      req,
+      res,
+      verifierOptions,
+    );
+    if (!call) {
       return;
     }
 
-    res.status(200).json({
-      transactionId: result.transactionId,
+    const initiatorId =
+      call.partnerId ?? this.options.partnerSecurityService.getControllerId();
+
+    this.log.info(
+      `Received request to initiate transaction from partner ${initiatorId}`,
+    );
+
+    const result = await this.options.controller.initiateTransaction({
+      ...call.payload,
+      initiatorId,
+      timeToExpire: new Date(call.payload.timeToExpire),
     });
+
+    const status = result.kind === "marked_for_review" ? 202 : 200;
+    const body =
+      result.kind === "marked_for_review"
+        ? { transactionId: result.transactionId, status: "MARKED_FOR_REVIEW" }
+        : { transactionId: result.transactionId };
+
+    await sendSignedJson(res, status, body, call, verifierOptions);
   }
 }

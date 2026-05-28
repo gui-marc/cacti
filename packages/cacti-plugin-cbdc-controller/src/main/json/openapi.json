@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Hyperledger Cacti Plugin - CBDC Interoperability Controller",
-    "description": "OpenAPI specification for the CBDC Interoperability Controller plugin. Exposes endpoints to initiate and accept cross-ledger CBDC transactions.",
+    "description": "OpenAPI specification for the CBDC Interoperability Controller plugin. Exposes endpoints to initiate and accept cross-ledger CBDC transactions. Every request and successful response is a signed envelope; payload schemas describe the inner content that goes inside the envelope's `signed` field.",
     "version": "0.0.1",
     "license": {
       "name": "Apache-2.0",
@@ -11,9 +11,28 @@
   },
   "components": {
     "schemas": {
-      "InitiateTransactionRequest": {
+      "SignedEnvelope": {
         "type": "object",
-        "description": "Request body for initiating a cross-ledger CBDC transaction.",
+        "description": "HMAC-SHA256 signed envelope. `signed` is the base64 encoding of canonical bytes of the form `v1.<senderId>.<ts>.<nonce>.<payloadJson>` (request) or `v1.<senderId>.<requestNonce>.<payloadJson>` (response). `sig` is the HMAC of those canonical bytes computed with the partner's shared secret. `partnerId` identifies the sender of this envelope.",
+        "required": ["partnerId", "signed", "sig"],
+        "properties": {
+          "partnerId": {
+            "type": "string",
+            "description": "Identifier of the partner that produced this envelope (caller on requests, controller on responses)."
+          },
+          "signed": {
+            "type": "string",
+            "description": "Base64 of the canonical bytes that were signed."
+          },
+          "sig": {
+            "type": "string",
+            "description": "Hex HMAC-SHA256 of the canonical bytes, keyed by the partner's shared secret."
+          }
+        }
+      },
+      "InitiateTransactionPayload": {
+        "type": "object",
+        "description": "Inner payload of a signed initiate-transaction request.",
         "required": [
           "sourceChainCode",
           "destinationChainCode",
@@ -51,16 +70,16 @@
           },
           "complianceProviders": {
             "type": "array",
-            "description": "Identifiers of compliance providers that must approve the transaction.",
+            "description": "Identifiers of compliance endpoints that must approve the transaction.",
             "items": {
               "type": "string"
             }
           }
         }
       },
-      "InitiateTransactionResponse": {
+      "InitiateTransactionResponsePayload": {
         "type": "object",
-        "description": "Response returned when an initiate-transaction request is accepted.",
+        "description": "Inner payload of the signed initiate-transaction response.",
         "required": ["transactionId"],
         "properties": {
           "transactionId": {
@@ -74,9 +93,9 @@
           }
         }
       },
-      "AcceptTransactionRequest": {
+      "AcceptTransactionPayload": {
         "type": "object",
-        "description": "Request body for accepting a previously initiated transaction.",
+        "description": "Inner payload of a signed accept-transaction request.",
         "required": ["transactionId"],
         "properties": {
           "transactionId": {
@@ -85,9 +104,9 @@
           }
         }
       },
-      "AcceptTransactionResponse": {
+      "AcceptTransactionResponsePayload": {
         "type": "object",
-        "description": "Response returned when an accept-transaction request completes.",
+        "description": "Inner payload of the signed accept-transaction response.",
         "required": ["transactionId", "status"],
         "properties": {
           "transactionId": {
@@ -103,8 +122,12 @@
       },
       "ErrorResponse": {
         "type": "object",
-        "description": "Generic error response.",
+        "description": "Unsigned error response. 4xx/5xx responses are not enveloped because the sender's identity (or shared secret) may be unknown or in dispute.",
         "properties": {
+          "error": {
+            "type": "string",
+            "description": "Short machine-readable error code (e.g. BAD_SIGNATURE, UNKNOWN_PARTNER, STALE_TIMESTAMP, REPLAYED_NONCE)."
+          },
           "message": {
             "type": "string"
           }
@@ -117,14 +140,14 @@
       "post": {
         "operationId": "initiateTransactionV1",
         "summary": "Initiate a cross-ledger CBDC transaction.",
-        "description": "Submits a new CBDC transaction request to the controller for compliance evaluation and execution.",
+        "description": "Submits a new CBDC transaction request to the controller for compliance evaluation and execution. The request body must be a `SignedEnvelope` whose inner payload is an `InitiateTransactionPayload`. The 200/202 response body is a `SignedEnvelope` whose inner payload is an `InitiateTransactionResponsePayload`, bound to the request's nonce.",
         "tags": ["transactions"],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/InitiateTransactionRequest"
+                "$ref": "#/components/schemas/SignedEnvelope"
               }
             }
           }
@@ -135,7 +158,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/InitiateTransactionResponse"
+                  "$ref": "#/components/schemas/SignedEnvelope"
                 }
               }
             }
@@ -145,13 +168,23 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/InitiateTransactionResponse"
+                  "$ref": "#/components/schemas/SignedEnvelope"
                 }
               }
             }
           },
           "400": {
             "description": "Invalid request payload.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Envelope signature missing, malformed, or unverifiable.",
             "content": {
               "application/json": {
                 "schema": {
@@ -167,14 +200,14 @@
       "post": {
         "operationId": "acceptTransactionV1",
         "summary": "Accept a transaction previously marked for review.",
-        "description": "Confirms a transaction so the controller proceeds with execution.",
+        "description": "Confirms a transaction so the controller proceeds with execution. The request body must be a `SignedEnvelope` whose inner payload is an `AcceptTransactionPayload`. Only the partner that initiated the transaction may accept it. The 200 response body is a `SignedEnvelope` whose inner payload is an `AcceptTransactionResponsePayload`, bound to the request's nonce.",
         "tags": ["transactions"],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/AcceptTransactionRequest"
+                "$ref": "#/components/schemas/SignedEnvelope"
               }
             }
           }
@@ -185,13 +218,33 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AcceptTransactionResponse"
+                  "$ref": "#/components/schemas/SignedEnvelope"
                 }
               }
             }
           },
           "400": {
             "description": "Invalid request payload.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Envelope signature missing, malformed, or unverifiable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Caller is not the initiator of the referenced transaction.",
             "content": {
               "application/json": {
                 "schema": {

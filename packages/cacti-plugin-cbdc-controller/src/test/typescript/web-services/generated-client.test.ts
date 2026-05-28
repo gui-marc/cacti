@@ -2,9 +2,9 @@ import { describe, expect, it, jest } from "@jest/globals";
 import {
   Configuration,
   TransactionsApi,
-  InitiateTransactionRequest,
-  InitiateTransactionResponseStatusEnum,
-  AcceptTransactionResponseStatusEnum,
+  SignedEnvelope,
+  InitiateTransactionResponsePayloadStatusEnum,
+  AcceptTransactionResponsePayloadStatusEnum,
 } from "../../../main/typescript/generated/openapi/typescript-axios";
 
 describe("Generated typescript-axios client", () => {
@@ -17,15 +17,21 @@ describe("Generated typescript-axios client", () => {
   });
 
   it("exposes typed enums matching the OpenAPI spec", () => {
-    expect(InitiateTransactionResponseStatusEnum.MarkedForReview).toBe(
+    expect(InitiateTransactionResponsePayloadStatusEnum.MarkedForReview).toBe(
       "MARKED_FOR_REVIEW",
     );
-    expect(AcceptTransactionResponseStatusEnum.Completed).toBe("COMPLETED");
+    expect(AcceptTransactionResponsePayloadStatusEnum.Completed).toBe(
+      "COMPLETED",
+    );
   });
 
-  it("sends a POST to the spec'd path with the request body", async () => {
+  it("sends a POST to the spec'd path with the signed envelope body", async () => {
     const axiosRequest = jest.fn(async () => ({
-      data: { transactionId: "tx-generated" },
+      data: {
+        partnerId: "test-controller",
+        signed: "ZmFrZQ==",
+        sig: "deadbeef",
+      },
       status: 200,
     }));
 
@@ -37,19 +43,15 @@ describe("Generated typescript-axios client", () => {
       { request: axiosRequest } as any,
     );
 
-    const body: InitiateTransactionRequest = {
-      sourceChainCode: "a",
-      destinationChainCode: "b",
-      senderAddress: "0xsender",
-      receiverAddress: "0xreceiver",
-      amount: 1,
-      timeToExpire: new Date().toISOString(),
-      complianceProviders: [],
+    const envelope: SignedEnvelope = {
+      partnerId: "test-bank",
+      signed: "ZmFrZQ==",
+      sig: "deadbeef",
     };
 
-    const result = await api.initiateTransactionV1(body);
+    const result = await api.initiateTransactionV1(envelope);
 
-    expect(result.data).toEqual({ transactionId: "tx-generated" });
+    expect(result.status).toBe(200);
     expect(axiosRequest).toHaveBeenCalledTimes(1);
     const call = (
       axiosRequest.mock.calls as unknown as Array<
@@ -60,6 +62,6 @@ describe("Generated typescript-axios client", () => {
     expect(call.url).toContain(
       "/api/v1/plugins/@hyperledger-cacti/cacti-plugin-cbdc-controller/initiate-transaction",
     );
-    expect(JSON.parse(call.data)).toEqual(body);
+    expect(JSON.parse(call.data)).toEqual(envelope);
   });
 });

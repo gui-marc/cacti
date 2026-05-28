@@ -18,10 +18,12 @@ export {
   TransactionStore,
 } from "./store/transaction-store";
 
+export { InMemoryPartnersStore, PartnersStore } from "./store/partners-store";
+
 export {
-  InMemoryComplianceProvidersStore,
-  ComplianceProvidersStore,
-} from "./store/compliance-providers-store";
+  InMemoryComplianceEndpointsStore,
+  ComplianceEndpointsStore,
+} from "./store/compliance-endpoints-store";
 
 export {
   FXProvisionStrategy,
@@ -30,23 +32,30 @@ export {
 } from "./core/fx-provision";
 
 export {
-  COMPLIANCE_SECRET_MIN_BYTES,
-  COMPLIANCE_SIGNING_VERSION,
-  COMPLIANCE_TIMESTAMP_WINDOW_MS,
-  COMPLIANCE_NONCE_TTL_MS,
-  ComplianceSigningError,
+  PARTNER_SECRET_MIN_BYTES,
+  PARTNER_SIGNING_VERSION,
+  PARTNER_TIMESTAMP_WINDOW_MS,
+  PARTNER_NONCE_TTL_MS,
+  PartnerSigningError,
   ISignedEnvelope,
   ISignedRequest,
   IVerifiedRequest,
+  IPartnerLookup,
   NonceCache,
   assertSecretStrength,
-  generateComplianceProviderSecret,
+  generatePartnerSecret,
   generateNonce,
+  parseEnvelope,
   signRequest,
   signResponse,
   verifyRequest,
   verifyResponse,
-} from "./core/compliance-signing";
+} from "./core/partner-signing";
+
+export {
+  PartnerSecurityService,
+  IPartnerSecurityServiceOptions,
+} from "./core/partner-security-service";
 
 export { ICBDCControllerOptions } from "./core/cbdc-controller";
 
@@ -55,12 +64,14 @@ export {
   IInfrastructure,
   IRequestOptions,
   IInitiateTransactionRequest,
+  IInitiateTransactionCommand,
   IAcceptTransactionRequest,
   InitiateTransactionResult,
   ITransaction,
   TransactionStatus,
   ComplianceResult,
-  IComplianceProvider,
+  IPartner,
+  IComplianceEndpoint,
   IFXProvider,
   IGetFXRateRequest,
   IGetFXRateResponse,

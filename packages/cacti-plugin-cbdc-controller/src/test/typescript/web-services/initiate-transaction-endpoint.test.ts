@@ -8,6 +8,11 @@ import {
   InitiateTransactionResult,
 } from "../../../main/typescript/types";
 import CBDCController from "../../../main/typescript/core/cbdc-controller";
+import { PartnerSecurityService } from "../../../main/typescript/core/partner-security-service";
+import {
+  InMemoryPartnersStore,
+  PartnersStore,
+} from "../../../main/typescript/store/partners-store";
 
 const buildRequest = (
   overrides: Partial<IInitiateTransactionRequest> = {},
@@ -29,6 +34,14 @@ const buildRes = () => {
   return res as Response;
 };
 
+const buildSecurityService = (
+  partnersStore: PartnersStore = new InMemoryPartnersStore(),
+): PartnerSecurityService =>
+  new PartnerSecurityService({
+    controllerId: "test-controller",
+    partnersStore,
+  });
+
 const buildEndpoint = (initiateResult: InitiateTransactionResult) => {
   const initiateTransaction = jest
     .fn<CBDCController["initiateTransaction"]>()
@@ -38,6 +51,8 @@ const buildEndpoint = (initiateResult: InitiateTransactionResult) => {
   const options: IRequestOptions = {
     controller,
     infrastructure,
+    partnerSecurityService: buildSecurityService(),
+    requireClientAuth: false,
     logLevel: "ERROR",
   };
   return {
@@ -68,6 +83,8 @@ describe("InitiateTransactionEndpointV1", () => {
   it("rejects construction without infrastructure", () => {
     const options = {
       controller: {} as CBDCController,
+      partnerSecurityService: buildSecurityService(),
+      requireClientAuth: false,
       logLevel: "ERROR" as const,
     } as IRequestOptions;
     expect(() => new InitiateTransactionEndpointV1(options)).toThrow(
@@ -75,18 +92,33 @@ describe("InitiateTransactionEndpointV1", () => {
     );
   });
 
-  it("returns 200 with the transactionId when the controller completes the transaction", async () => {
+  it("rejects construction without partnerSecurityService", () => {
+    const options = {
+      controller: {} as CBDCController,
+      infrastructure: { environments: {} } as IInfrastructure,
+      requireClientAuth: false,
+      logLevel: "ERROR" as const,
+    } as unknown as IRequestOptions;
+    expect(() => new InitiateTransactionEndpointV1(options)).toThrow(
+      /partnerSecurityService/,
+    );
+  });
+
+  it("returns 200 with the transactionId when the controller completes the transaction (auth disabled)", async () => {
     const { endpoint, initiateTransaction } = buildEndpoint({
       kind: "completed",
       transactionId: "tx-200",
     });
     const body = buildRequest();
-    const req = { body } as Request;
+    const req = { body, method: "POST", path: "/" } as Request;
     const res = buildRes();
 
     await endpoint.handleRequest(req, res);
 
-    expect(initiateTransaction).toHaveBeenCalledWith(body);
+    expect(initiateTransaction).toHaveBeenCalledWith({
+      ...body,
+      initiatorId: "test-controller",
+    });
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.json).toHaveBeenCalledWith({ transactionId: "tx-200" });
   });
@@ -96,7 +128,11 @@ describe("InitiateTransactionEndpointV1", () => {
       kind: "marked_for_review",
       transactionId: "tx-202",
     });
-    const req = { body: buildRequest() } as Request;
+    const req = {
+      body: buildRequest(),
+      method: "POST",
+      path: "/",
+    } as Request;
     const res = buildRes();
 
     await endpoint.handleRequest(req, res);
@@ -116,9 +152,15 @@ describe("InitiateTransactionEndpointV1", () => {
     const endpoint = new InitiateTransactionEndpointV1({
       controller,
       infrastructure: { environments: {} } as IInfrastructure,
+      partnerSecurityService: buildSecurityService(),
+      requireClientAuth: false,
       logLevel: "ERROR",
     });
-    const req = { body: buildRequest() } as Request;
+    const req = {
+      body: buildRequest(),
+      method: "POST",
+      path: "/",
+    } as Request;
     const res = buildRes();
 
     await expect(endpoint.handleRequest(req, res)).rejects.toThrow("boom");

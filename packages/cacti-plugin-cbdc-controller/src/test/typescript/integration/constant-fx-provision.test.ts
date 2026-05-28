@@ -49,7 +49,8 @@ import { createMigrationSource } from "@hyperledger/cactus-plugin-satp-hermes/sr
 import { knexLocalInstance } from "@hyperledger/cactus-plugin-satp-hermes/src/main/typescript/database/knexfile";
 import { knexRemoteInstance } from "@hyperledger/cactus-plugin-satp-hermes/src/main/typescript/database/knexfile-remote";
 import { randomUUID } from "crypto";
-import { InMemoryComplianceProvidersStore } from "../../../main/typescript/store/compliance-providers-store";
+import { InMemoryPartnersStore } from "../../../main/typescript/store/partners-store";
+import { InMemoryComplianceEndpointsStore } from "../../../main/typescript/store/compliance-endpoints-store";
 import { InMemoryTransactionStore } from "../../../main/typescript/store/transaction-store";
 import { ILedgerEnvironment } from "../../../main/typescript/types";
 import ConstantFxProvisionStrategy from "../fx-provision/constant-fx-provision-strategy";
@@ -256,11 +257,14 @@ describe("CBDC controller using constant FX provision", () => {
 
       const cbdcPlugin = await cbdcFactory.create({
         instanceId: "test-instance",
-        complianceProvidersStore: new InMemoryComplianceProvidersStore(),
+        controllerId: "constant-fx-test-controller",
+        partnersStore: new InMemoryPartnersStore(),
+        complianceEndpointsStore: new InMemoryComplianceEndpointsStore(),
         fxProvisionStrategy: new ConstantFxProvisionStrategy(1.5),
         transactionStore: new InMemoryTransactionStore(),
         environments: { besu: besuCBDCEnv, ethereum: ethereumCBDCEnv },
         logLevel,
+        requireClientAuth: false,
       });
       await cbdcPlugin.onPluginInit();
 
@@ -313,6 +317,7 @@ describe("CBDC controller using constant FX provision", () => {
       await ethereumEnv.giveRoleToBridge(ethWrapper);
 
       await cbdcController.initiateTransaction({
+        initiatorId: "constant-fx-test-initiator",
         amount: 100,
         complianceProviders: [],
         destinationChainCode: "ethereum",

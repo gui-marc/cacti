@@ -3,9 +3,11 @@ import { LoggerProvider, LogLevelDesc } from "@hyperledger/cactus-common";
 import { InMemoryTransactionStore } from "../../../main/typescript/store/transaction-store";
 import CBDCController from "../../../main/typescript/core/cbdc-controller";
 import ConstantFxProvisionStrategy from "../../../test/typescript/fx-provision/constant-fx-provision-strategy";
-import { InMemoryComplianceProvidersStore } from "../../../main/typescript/store/compliance-providers-store";
+import { InMemoryPartnersStore } from "../../../main/typescript/store/partners-store";
+import { InMemoryComplianceEndpointsStore } from "../../../main/typescript/store/compliance-endpoints-store";
 import { DummyComplianceProvider } from "../../../test/typescript/compliance/dummy-compliance-provider";
-import { generateComplianceProviderSecret } from "../../../main/typescript/core/compliance-signing";
+import { generatePartnerSecret } from "../../../main/typescript/core/partner-signing";
+import { PartnerSecurityService } from "../../../main/typescript/core/partner-security-service";
 import {
   ComplianceResult,
   ILedgerEnvironment,
@@ -28,18 +30,37 @@ const log = LoggerProvider.getOrCreate({
 
 describe("Transaction Controller", () => {
   const transactionStore = new InMemoryTransactionStore();
-  const complianceStoreProvider = new InMemoryComplianceProvidersStore();
-  const complianceProviderSecret = generateComplianceProviderSecret();
+  const partnersStore = new InMemoryPartnersStore();
+  const complianceEndpointsStore = new InMemoryComplianceEndpointsStore();
+  const controllerId = "test-controller";
+  const initiatorId = "test-initiator";
+  const compliancePartnerId = "dummy-compliance-bank";
+  const complianceEndpointId = "dummy-compliance-endpoint";
+  const initiatorSecret = generatePartnerSecret();
+  const complianceProviderSecret = generatePartnerSecret();
+
   const complianceProvider = new DummyComplianceProvider({
     port: 8081,
+    partnerId: compliancePartnerId,
     apiKey: complianceProviderSecret,
+    controllerId,
     nextCheckResponse: ComplianceResult.APPROVED,
   });
 
-  complianceStoreProvider.save({
-    id: "dummy-compliance-provider",
+  partnersStore.save({ id: initiatorId, apiKey: initiatorSecret });
+  partnersStore.save({
+    id: compliancePartnerId,
     apiKey: complianceProviderSecret,
-    endpoint: complianceProvider.getEndpointUrl(),
+  });
+  complianceEndpointsStore.save({
+    id: complianceEndpointId,
+    partnerId: compliancePartnerId,
+    url: complianceProvider.getEndpointUrl(),
+  });
+
+  const partnerSecurityService = new PartnerSecurityService({
+    controllerId,
+    partnersStore,
   });
 
   const cbdc_a_environment = {
@@ -123,23 +144,25 @@ describe("Transaction Controller", () => {
   });
 
   it("should be able to complete a transaction sucessfully", async () => {
-    const controller = new CBDCController(
+    const controller = new CBDCController({
       transactionStore,
-      new ConstantFxProvisionStrategy(0.5),
-      complianceStoreProvider,
-      {
+      fxProvisionStrategy: new ConstantFxProvisionStrategy(0.5),
+      complianceEndpointsStore,
+      partnerSecurityService,
+      infrastructure: {
         environments: {
           cbdc_a: cbdc_a_environment,
           cbdc_b: cbdc_b_environment,
         },
       },
       logLevel,
-      { requireHttps: false },
-    );
+      requireHttps: false,
+    });
 
     await controller.initiateTransaction({
       amount: 100,
-      complianceProviders: ["dummy-compliance-provider"],
+      complianceProviders: [complianceEndpointId],
+      initiatorId,
       sourceChainCode: "cbdc_a",
       destinationChainCode: "cbdc_b",
       receiverAddress: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd",
@@ -151,23 +174,25 @@ describe("Transaction Controller", () => {
   it("should fail if compliance check fails", async () => {
     complianceProvider.setNextCheckResponse(ComplianceResult.REJECTED);
 
-    const controller = new CBDCController(
+    const controller = new CBDCController({
       transactionStore,
-      new ConstantFxProvisionStrategy(0.5),
-      complianceStoreProvider,
-      {
+      fxProvisionStrategy: new ConstantFxProvisionStrategy(0.5),
+      complianceEndpointsStore,
+      partnerSecurityService,
+      infrastructure: {
         environments: {
           cbdc_a: cbdc_a_environment,
           cbdc_b: cbdc_b_environment,
         },
       },
       logLevel,
-      { requireHttps: false },
-    );
+      requireHttps: false,
+    });
 
     const promise = controller.initiateTransaction({
       amount: 100,
-      complianceProviders: ["dummy-compliance-provider"],
+      complianceProviders: [complianceEndpointId],
+      initiatorId,
       sourceChainCode: "cbdc_a",
       destinationChainCode: "cbdc_b",
       receiverAddress: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd",
@@ -181,19 +206,20 @@ describe("Transaction Controller", () => {
   describe("MARKED_FOR_REVIEW handling", () => {
     let markedTransactionId: string;
 
-    const controller = new CBDCController(
+    const controller = new CBDCController({
       transactionStore,
-      new ConstantFxProvisionStrategy(0.5),
-      complianceStoreProvider,
-      {
+      fxProvisionStrategy: new ConstantFxProvisionStrategy(0.5),
+      complianceEndpointsStore,
+      partnerSecurityService,
+      infrastructure: {
         environments: {
           cbdc_a: cbdc_a_environment,
           cbdc_b: cbdc_b_environment,
         },
       },
       logLevel,
-      { requireHttps: false },
-    );
+      requireHttps: false,
+    });
 
     it("should pause without performing SATP transfer when a provider marks for review", async () => {
       complianceProvider.setNextCheckResponse(
@@ -202,7 +228,8 @@ describe("Transaction Controller", () => {
 
       const result = await controller.initiateTransaction({
         amount: 100,
-        complianceProviders: ["dummy-compliance-provider"],
+        complianceProviders: [complianceEndpointId],
+        initiatorId,
         sourceChainCode: "cbdc_a",
         destinationChainCode: "cbdc_b",
         receiverAddress: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd",
@@ -224,8 +251,14 @@ describe("Transaction Controller", () => {
 
     it("should reject acceptTransaction for an unknown transaction id", async () => {
       await expect(
-        controller.acceptTransaction("non-existent-id"),
+        controller.acceptTransaction("non-existent-id", initiatorId),
       ).rejects.toThrow(/not found/);
+    });
+
+    it("should reject acceptTransaction by a partner who is not the initiator", async () => {
+      await expect(
+        controller.acceptTransaction(markedTransactionId, "someone-else"),
+      ).rejects.toThrow(/is not the initiator/);
     });
 
     it("should resume and complete a marked-for-review transaction via acceptTransaction", async () => {
@@ -233,7 +266,7 @@ describe("Transaction Controller", () => {
       // path — acceptTransaction must not re-run compliance checks.
       complianceProvider.setNextCheckResponse(ComplianceResult.REJECTED);
 
-      await controller.acceptTransaction(markedTransactionId);
+      await controller.acceptTransaction(markedTransactionId, initiatorId);
 
       const persisted = await transactionStore.get(markedTransactionId);
       expect(persisted!.status).toBe(TransactionStatus.COMPLETED);
@@ -242,7 +275,7 @@ describe("Transaction Controller", () => {
     it("should reject acceptTransaction for a transaction not in MARKED_FOR_REVIEW status", async () => {
       // markedTransactionId is now COMPLETED from the previous test.
       await expect(
-        controller.acceptTransaction(markedTransactionId),
+        controller.acceptTransaction(markedTransactionId, initiatorId),
       ).rejects.toThrow(/Cannot accept transaction/);
     });
   });
@@ -251,19 +284,20 @@ describe("Transaction Controller", () => {
     const fxStrategy = new ConstantFxProvisionStrategy(0.5);
     const releaseSpy = jest.spyOn(fxStrategy, "releaseLiquidity");
 
-    const controller = new CBDCController(
+    const controller = new CBDCController({
       transactionStore,
-      fxStrategy,
-      complianceStoreProvider,
-      {
+      fxProvisionStrategy: fxStrategy,
+      complianceEndpointsStore,
+      partnerSecurityService,
+      infrastructure: {
         environments: {
           cbdc_a: cbdc_a_environment,
           cbdc_b: cbdc_b_environment,
         },
       },
       logLevel,
-      { requireHttps: false },
-    );
+      requireHttps: false,
+    });
 
     beforeEach(() => {
       releaseSpy.mockClear();
@@ -276,7 +310,8 @@ describe("Transaction Controller", () => {
 
       const result = await controller.initiateTransaction({
         amount: 100,
-        complianceProviders: ["dummy-compliance-provider"],
+        complianceProviders: [complianceEndpointId],
+        initiatorId,
         sourceChainCode: "cbdc_a",
         destinationChainCode: "cbdc_b",
         receiverAddress: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd",
@@ -301,7 +336,8 @@ describe("Transaction Controller", () => {
 
       const result = await controller.initiateTransaction({
         amount: 100,
-        complianceProviders: ["dummy-compliance-provider"],
+        complianceProviders: [complianceEndpointId],
+        initiatorId,
         sourceChainCode: "cbdc_a",
         destinationChainCode: "cbdc_b",
         receiverAddress: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd",
@@ -309,7 +345,7 @@ describe("Transaction Controller", () => {
         timeToExpire: new Date(Date.now() + 300),
       });
 
-      await controller.acceptTransaction(result.transactionId);
+      await controller.acceptTransaction(result.transactionId, initiatorId);
 
       // Wait past the original deadline; the cleared timer must not fire.
       await new Promise((resolve) => setTimeout(resolve, 600));
@@ -330,14 +366,15 @@ describe("Transaction Controller", () => {
         amount: 100,
         timeToExpire: new Date(Date.now() - 1000),
         status: TransactionStatus.MARKED_FOR_REVIEW,
-        complianceProviders: ["dummy-compliance-provider"],
+        complianceProviders: [complianceEndpointId],
+        initiatorId,
         complianceResult: ComplianceResult.MARKED_FOR_REVIEW,
         fxRate: 0.5,
       });
 
-      await expect(controller.acceptTransaction(transactionId)).rejects.toThrow(
-        /has expired/,
-      );
+      await expect(
+        controller.acceptTransaction(transactionId, initiatorId),
+      ).rejects.toThrow(/has expired/);
 
       const persisted = await transactionStore.get(transactionId);
       expect(persisted!.status).toBe(TransactionStatus.EXPIRED);

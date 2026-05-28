@@ -1,27 +1,28 @@
 import { randomUUID } from "crypto";
 import {
   ComplianceResult,
-  IComplianceProvider,
   IGetComplianceCheckResponse,
   IInfrastructure,
-  IInitiateTransactionRequest,
+  IInitiateTransactionCommand,
   InitiateTransactionResult,
   ITransaction,
   TransactionStatus,
 } from "../types";
 import { TransactionStore } from "../store/transaction-store";
-import { ComplianceProvidersStore } from "../store/compliance-providers-store";
+import { ComplianceEndpointsStore } from "../store/compliance-endpoints-store";
 import { FXProvisionStrategy } from "./fx-provision";
 import axios from "axios";
 import { Logger, LogLevelDesc } from "@hyperledger/cactus-common";
-import {
-  ComplianceSigningError,
-  ISignedEnvelope,
-  signRequest,
-  verifyResponse,
-} from "./compliance-signing";
+import { ISignedEnvelope, PartnerSigningError } from "./partner-signing";
+import { PartnerSecurityService } from "./partner-security-service";
 
 export interface ICBDCControllerOptions {
+  transactionStore: TransactionStore;
+  fxProvisionStrategy: FXProvisionStrategy;
+  complianceEndpointsStore: ComplianceEndpointsStore;
+  partnerSecurityService: PartnerSecurityService;
+  infrastructure: IInfrastructure;
+  logLevel?: LogLevelDesc;
   requireHttps?: boolean;
 }
 
@@ -30,35 +31,34 @@ export default class CBDCController {
 
   private readonly store: TransactionStore;
   private readonly fxProvisionStrategy: FXProvisionStrategy;
-  private readonly complianceProvidersStore: ComplianceProvidersStore;
+  private readonly complianceEndpointsStore: ComplianceEndpointsStore;
+  private readonly partnerSecurityService: PartnerSecurityService;
   private readonly infrastructure: IInfrastructure;
   private readonly requireHttps: boolean;
   // TODO: Crash recovery mechanism to handle server restarts and ensure pending transactions are not lost
   private readonly expiryTimers: Map<string, NodeJS.Timeout> = new Map();
 
-  constructor(
-    store: TransactionStore,
-    fxProvisionStrategy: FXProvisionStrategy,
-    complianceProvidersStore: ComplianceProvidersStore,
-    infrastructure: IInfrastructure,
-    logLevel: LogLevelDesc = "INFO",
-    options: ICBDCControllerOptions = {},
-  ) {
-    this.store = store;
-    this.fxProvisionStrategy = fxProvisionStrategy;
-    this.complianceProvidersStore = complianceProvidersStore;
-    this.infrastructure = infrastructure;
+  constructor(options: ICBDCControllerOptions) {
+    this.store = options.transactionStore;
+    this.fxProvisionStrategy = options.fxProvisionStrategy;
+    this.complianceEndpointsStore = options.complianceEndpointsStore;
+    this.partnerSecurityService = options.partnerSecurityService;
+    this.infrastructure = options.infrastructure;
     this.requireHttps = options.requireHttps ?? true;
-    this.log = new Logger({ label: "CBDCController", level: logLevel });
+    this.log = new Logger({
+      label: "CBDCController",
+      level: options.logLevel ?? "INFO",
+    });
   }
 
   public async initiateTransaction(
-    req: IInitiateTransactionRequest,
+    req: IInitiateTransactionCommand,
   ): Promise<InitiateTransactionResult> {
     const transactionID = this.generateTransactionID();
 
     const transaction = {
       id: transactionID,
+      initiatorId: req.initiatorId,
       sourceChainCode: req.sourceChainCode,
       destinationChainCode: req.destinationChainCode,
       senderAddress: req.senderAddress,
@@ -132,10 +132,18 @@ export default class CBDCController {
     return { kind: "completed", transactionId: transactionID };
   }
 
-  public async acceptTransaction(transactionId: string): Promise<void> {
+  public async acceptTransaction(
+    transactionId: string,
+    actorId: string,
+  ): Promise<void> {
     const transaction = await this.store.get(transactionId);
     if (!transaction) {
       throw new Error(`Transaction with id ${transactionId} not found`);
+    }
+    if (transaction.initiatorId !== actorId) {
+      throw new Error(
+        `Partner ${actorId} is not the initiator of transaction ${transactionId} and cannot accept it`,
+      );
     }
     if (transaction.status !== TransactionStatus.MARKED_FOR_REVIEW) {
       throw new Error(
@@ -270,23 +278,9 @@ export default class CBDCController {
       );
     }
 
-    const complianceProviders: IComplianceProvider[] = [];
-    await Promise.all(
-      transaction.complianceProviders.map(async (providerId) => {
-        const provider = await this.complianceProvidersStore.get(providerId);
-        if (!provider) {
-          this.log.warn(
-            `Compliance provider with id ${providerId} not found, skipping`,
-          );
-          return;
-        }
-        complianceProviders.push(provider);
-      }),
-    );
-
     const results = await Promise.all(
-      complianceProviders.map((provider) =>
-        this.callComplianceProvider(provider, transaction),
+      transaction.complianceProviders.map((endpointId) =>
+        this.callComplianceEndpoint(endpointId, transaction),
       ),
     );
 
@@ -310,13 +304,21 @@ export default class CBDCController {
     return worstResult;
   }
 
-  private async callComplianceProvider(
-    provider: IComplianceProvider,
+  private async callComplianceEndpoint(
+    endpointId: string,
     transaction: ITransaction,
   ): Promise<ComplianceResult | undefined> {
-    if (this.requireHttps && !provider.endpoint.startsWith("https://")) {
+    const endpoint = await this.complianceEndpointsStore.get(endpointId);
+    if (!endpoint) {
+      this.log.warn(
+        `Compliance endpoint with id ${endpointId} not found, skipping`,
+      );
+      return undefined;
+    }
+
+    if (this.requireHttps && !endpoint.url.startsWith("https://")) {
       this.log.error(
-        `Refusing to call compliance provider ${provider.id}: endpoint ${provider.endpoint} is not https (requireHttps=true). Counting as REJECTED.`,
+        `Refusing to call compliance endpoint ${endpoint.id}: url ${endpoint.url} is not https (requireHttps=true). Counting as REJECTED.`,
       );
       return ComplianceResult.REJECTED;
     }
@@ -330,24 +332,39 @@ export default class CBDCController {
       amount: transaction.amount,
     };
 
-    const { envelope, nonce } = signRequest(provider.apiKey, payload);
+    let envelope: ISignedEnvelope;
+    let nonce: string;
+    try {
+      const signed = await this.partnerSecurityService.signOutgoingRequest(
+        endpoint.partnerId,
+        payload,
+      );
+      envelope = signed.envelope;
+      nonce = signed.nonce;
+    } catch (error) {
+      this.log.error(
+        `Cannot sign compliance request for endpoint ${endpoint.id} (partner ${endpoint.partnerId}), skipping:`,
+        error,
+      );
+      return undefined;
+    }
 
     let responseEnvelope: ISignedEnvelope;
     try {
       const httpResponse = await axios.post<ISignedEnvelope>(
-        provider.endpoint,
+        endpoint.url,
         envelope,
       );
       if (httpResponse.status !== 200 || !httpResponse.data) {
         this.log.error(
-          `Compliance provider ${provider.id} returned status ${httpResponse.status} for transaction ${transaction.id}, skipping`,
+          `Compliance endpoint ${endpoint.id} returned status ${httpResponse.status} for transaction ${transaction.id}, skipping`,
         );
         return undefined;
       }
       responseEnvelope = httpResponse.data;
     } catch (error) {
       this.log.error(
-        `Error requesting compliance check from provider ${provider.id} for transaction ${transaction.id}, skipping:`,
+        `Error calling compliance endpoint ${endpoint.id} for transaction ${transaction.id}, skipping:`,
         error,
       );
       return undefined;
@@ -355,16 +372,17 @@ export default class CBDCController {
 
     let verified: IGetComplianceCheckResponse;
     try {
-      verified = verifyResponse<IGetComplianceCheckResponse>(
-        provider.apiKey,
-        nonce,
-        responseEnvelope,
-      );
+      verified =
+        await this.partnerSecurityService.verifyIncomingResponse<IGetComplianceCheckResponse>(
+          endpoint.partnerId,
+          nonce,
+          responseEnvelope,
+        );
     } catch (error) {
       const code =
-        error instanceof ComplianceSigningError ? error.code : "UNKNOWN";
+        error instanceof PartnerSigningError ? error.code : "UNKNOWN";
       this.log.error(
-        `SECURITY: compliance response from provider ${provider.id} for transaction ${transaction.id} failed verification (${code}). Counting as REJECTED.`,
+        `SECURITY: response from compliance endpoint ${endpoint.id} for transaction ${transaction.id} failed verification (${code}). Counting as REJECTED.`,
         error,
       );
       return ComplianceResult.REJECTED;
@@ -372,7 +390,7 @@ export default class CBDCController {
 
     if (verified.transactionId !== transaction.id) {
       this.log.error(
-        `SECURITY: provider ${provider.id} returned response for transaction ${verified.transactionId} but expected ${transaction.id}. Counting as REJECTED.`,
+        `SECURITY: endpoint ${endpoint.id} returned response for transaction ${verified.transactionId} but expected ${transaction.id}. Counting as REJECTED.`,
       );
       return ComplianceResult.REJECTED;
     }
@@ -420,7 +438,7 @@ export default class CBDCController {
       sourceEnvironment.getAsset(senderAddress, amount),
       destinationEnvironment.getAsset(
         receiverAddress,
-        Math.floor(amount * transaction.fxRate! * 1e6), // Assuming fxRate is defined as destination/source, we multiply the amount by the fxRate to get the destination amount. The 1e6 factor is to account for potential decimals in the FX rate
+        Math.floor(amount * transaction.fxRate! * 1e6),
       ),
     ]);
 
@@ -439,7 +457,6 @@ export default class CBDCController {
     }
 
     try {
-      // The transfer always begins on the source chain, so we use the source chain's transaction API to execute it
       await sourceEnvironment.transact({
         contextID: transactionId,
         receiverAsset,

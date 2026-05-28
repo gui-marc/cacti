@@ -5,6 +5,7 @@ import {
 } from "@hyperledger/cactus-plugin-satp-hermes";
 import { LogLevelDesc } from "@hyperledger/cactus-common";
 import CBDCController from "./core/cbdc-controller";
+import { PartnerSecurityService } from "./core/partner-security-service";
 
 export interface IInfrastructure {
   environments: Record<string, ILedgerEnvironment>;
@@ -21,6 +22,8 @@ export type ILedgerEnvironment = {
 export interface IRequestOptions {
   infrastructure: IInfrastructure;
   controller: CBDCController;
+  partnerSecurityService: PartnerSecurityService;
+  requireClientAuth: boolean;
   logLevel?: LogLevelDesc;
 }
 
@@ -32,6 +35,10 @@ export interface IInitiateTransactionRequest {
   amount: number;
   timeToExpire: Date;
   complianceProviders: string[];
+}
+
+export interface IInitiateTransactionCommand extends IInitiateTransactionRequest {
+  initiatorId: string;
 }
 
 export type InitiateTransactionResult =
@@ -76,6 +83,7 @@ export enum TransactionStatus {
 
 export interface ITransaction {
   id: string;
+  initiatorId: string;
   sourceChainCode: string;
   destinationChainCode: string;
   senderAddress: string;
@@ -88,10 +96,15 @@ export interface ITransaction {
   fxRate?: number;
 }
 
-export interface IComplianceProvider {
+export interface IPartner {
   id: string;
-  endpoint: string;
   apiKey: string;
+}
+
+export interface IComplianceEndpoint {
+  id: string;
+  partnerId: string;
+  url: string;
 }
 
 export interface IFXProvider {

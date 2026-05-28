@@ -2,7 +2,7 @@
 /* eslint-disable */
 /**
  * Hyperledger Cacti Plugin - CBDC Interoperability Controller
- * OpenAPI specification for the CBDC Interoperability Controller plugin. Exposes endpoints to initiate and accept cross-ledger CBDC transactions.
+ * OpenAPI specification for the CBDC Interoperability Controller plugin. Exposes endpoints to initiate and accept cross-ledger CBDC transactions. Every request and successful response is a signed envelope; payload schemas describe the inner content that goes inside the envelope\'s `signed` field.
  *
  * The version of the OpenAPI document: 0.0.1
  * 
@@ -24,50 +24,56 @@ import type { RequestArgs } from './base';
 import { BASE_PATH, COLLECTION_FORMATS, BaseAPI, RequiredError } from './base';
 
 /**
- * Request body for accepting a previously initiated transaction.
+ * Inner payload of a signed accept-transaction request.
  * @export
- * @interface AcceptTransactionRequest
+ * @interface AcceptTransactionPayload
  */
-export interface AcceptTransactionRequest {
+export interface AcceptTransactionPayload {
     /**
      * Identifier of the transaction to accept.
      * @type {string}
-     * @memberof AcceptTransactionRequest
+     * @memberof AcceptTransactionPayload
      */
     'transactionId': string;
 }
 /**
- * Response returned when an accept-transaction request completes.
+ * Inner payload of the signed accept-transaction response.
  * @export
- * @interface AcceptTransactionResponse
+ * @interface AcceptTransactionResponsePayload
  */
-export interface AcceptTransactionResponse {
+export interface AcceptTransactionResponsePayload {
     /**
      * Identifier of the accepted transaction.
      * @type {string}
-     * @memberof AcceptTransactionResponse
+     * @memberof AcceptTransactionResponsePayload
      */
     'transactionId': string;
     /**
      * Final status of the accepted transaction.
      * @type {string}
-     * @memberof AcceptTransactionResponse
+     * @memberof AcceptTransactionResponsePayload
      */
-    'status': AcceptTransactionResponseStatusEnum;
+    'status': AcceptTransactionResponsePayloadStatusEnum;
 }
 
-export const AcceptTransactionResponseStatusEnum = {
+export const AcceptTransactionResponsePayloadStatusEnum = {
     Completed: 'COMPLETED'
 } as const;
 
-export type AcceptTransactionResponseStatusEnum = typeof AcceptTransactionResponseStatusEnum[keyof typeof AcceptTransactionResponseStatusEnum];
+export type AcceptTransactionResponsePayloadStatusEnum = typeof AcceptTransactionResponsePayloadStatusEnum[keyof typeof AcceptTransactionResponsePayloadStatusEnum];
 
 /**
- * Generic error response.
+ * Unsigned error response. 4xx/5xx responses are not enveloped because the sender\'s identity (or shared secret) may be unknown or in dispute.
  * @export
  * @interface ErrorResponse
  */
 export interface ErrorResponse {
+    /**
+     * Short machine-readable error code (e.g. BAD_SIGNATURE, UNKNOWN_PARTNER, STALE_TIMESTAMP, REPLAYED_NONCE).
+     * @type {string}
+     * @memberof ErrorResponse
+     */
+    'error'?: string;
     /**
      * 
      * @type {string}
@@ -76,80 +82,105 @@ export interface ErrorResponse {
     'message'?: string;
 }
 /**
- * Request body for initiating a cross-ledger CBDC transaction.
+ * Inner payload of a signed initiate-transaction request.
  * @export
- * @interface InitiateTransactionRequest
+ * @interface InitiateTransactionPayload
  */
-export interface InitiateTransactionRequest {
+export interface InitiateTransactionPayload {
     /**
      * Identifier of the source ledger / chain.
      * @type {string}
-     * @memberof InitiateTransactionRequest
+     * @memberof InitiateTransactionPayload
      */
     'sourceChainCode': string;
     /**
      * Identifier of the destination ledger / chain.
      * @type {string}
-     * @memberof InitiateTransactionRequest
+     * @memberof InitiateTransactionPayload
      */
     'destinationChainCode': string;
     /**
      * Address of the sender on the source chain.
      * @type {string}
-     * @memberof InitiateTransactionRequest
+     * @memberof InitiateTransactionPayload
      */
     'senderAddress': string;
     /**
      * Address of the receiver on the destination chain.
      * @type {string}
-     * @memberof InitiateTransactionRequest
+     * @memberof InitiateTransactionPayload
      */
     'receiverAddress': string;
     /**
      * Amount of CBDC to transfer, denominated in the source asset.
      * @type {number}
-     * @memberof InitiateTransactionRequest
+     * @memberof InitiateTransactionPayload
      */
     'amount': number;
     /**
      * ISO-8601 timestamp after which the transaction is considered expired.
      * @type {string}
-     * @memberof InitiateTransactionRequest
+     * @memberof InitiateTransactionPayload
      */
     'timeToExpire': string;
     /**
-     * Identifiers of compliance providers that must approve the transaction.
+     * Identifiers of compliance endpoints that must approve the transaction.
      * @type {Array<string>}
-     * @memberof InitiateTransactionRequest
+     * @memberof InitiateTransactionPayload
      */
     'complianceProviders': Array<string>;
 }
 /**
- * Response returned when an initiate-transaction request is accepted.
+ * Inner payload of the signed initiate-transaction response.
  * @export
- * @interface InitiateTransactionResponse
+ * @interface InitiateTransactionResponsePayload
  */
-export interface InitiateTransactionResponse {
+export interface InitiateTransactionResponsePayload {
     /**
      * Unique identifier of the created transaction.
      * @type {string}
-     * @memberof InitiateTransactionResponse
+     * @memberof InitiateTransactionResponsePayload
      */
     'transactionId': string;
     /**
      * Optional status indicator. Present when the transaction requires manual review.
      * @type {string}
-     * @memberof InitiateTransactionResponse
+     * @memberof InitiateTransactionResponsePayload
      */
-    'status'?: InitiateTransactionResponseStatusEnum;
+    'status'?: InitiateTransactionResponsePayloadStatusEnum;
 }
 
-export const InitiateTransactionResponseStatusEnum = {
+export const InitiateTransactionResponsePayloadStatusEnum = {
     MarkedForReview: 'MARKED_FOR_REVIEW'
 } as const;
 
-export type InitiateTransactionResponseStatusEnum = typeof InitiateTransactionResponseStatusEnum[keyof typeof InitiateTransactionResponseStatusEnum];
+export type InitiateTransactionResponsePayloadStatusEnum = typeof InitiateTransactionResponsePayloadStatusEnum[keyof typeof InitiateTransactionResponsePayloadStatusEnum];
 
+/**
+ * HMAC-SHA256 signed envelope. `signed` is the base64 encoding of canonical bytes of the form `v1.<senderId>.<ts>.<nonce>.<payloadJson>` (request) or `v1.<senderId>.<requestNonce>.<payloadJson>` (response). `sig` is the HMAC of those canonical bytes computed with the partner\'s shared secret. `partnerId` identifies the sender of this envelope.
+ * @export
+ * @interface SignedEnvelope
+ */
+export interface SignedEnvelope {
+    /**
+     * Identifier of the partner that produced this envelope (caller on requests, controller on responses).
+     * @type {string}
+     * @memberof SignedEnvelope
+     */
+    'partnerId': string;
+    /**
+     * Base64 of the canonical bytes that were signed.
+     * @type {string}
+     * @memberof SignedEnvelope
+     */
+    'signed': string;
+    /**
+     * Hex HMAC-SHA256 of the canonical bytes, keyed by the partner\'s shared secret.
+     * @type {string}
+     * @memberof SignedEnvelope
+     */
+    'sig': string;
+}
 
 /**
  * TransactionsApi - axios parameter creator
@@ -158,15 +189,15 @@ export type InitiateTransactionResponseStatusEnum = typeof InitiateTransactionRe
 export const TransactionsApiAxiosParamCreator = function (configuration?: Configuration) {
     return {
         /**
-         * Confirms a transaction so the controller proceeds with execution.
+         * Confirms a transaction so the controller proceeds with execution. The request body must be a `SignedEnvelope` whose inner payload is an `AcceptTransactionPayload`. Only the partner that initiated the transaction may accept it. The 200 response body is a `SignedEnvelope` whose inner payload is an `AcceptTransactionResponsePayload`, bound to the request\'s nonce.
          * @summary Accept a transaction previously marked for review.
-         * @param {AcceptTransactionRequest} acceptTransactionRequest 
+         * @param {SignedEnvelope} signedEnvelope 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        acceptTransactionV1: async (acceptTransactionRequest: AcceptTransactionRequest, options: AxiosRequestConfig = {}): Promise<RequestArgs> => {
-            // verify required parameter 'acceptTransactionRequest' is not null or undefined
-            assertParamExists('acceptTransactionV1', 'acceptTransactionRequest', acceptTransactionRequest)
+        acceptTransactionV1: async (signedEnvelope: SignedEnvelope, options: AxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'signedEnvelope' is not null or undefined
+            assertParamExists('acceptTransactionV1', 'signedEnvelope', signedEnvelope)
             const localVarPath = `/api/v1/plugins/@hyperledger-cacti/cacti-plugin-cbdc-controller/accept-transaction`;
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
@@ -186,7 +217,7 @@ export const TransactionsApiAxiosParamCreator = function (configuration?: Config
             setSearchParams(localVarUrlObj, localVarQueryParameter);
             let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
             localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
-            localVarRequestOptions.data = serializeDataIfNeeded(acceptTransactionRequest, localVarRequestOptions, configuration)
+            localVarRequestOptions.data = serializeDataIfNeeded(signedEnvelope, localVarRequestOptions, configuration)
 
             return {
                 url: toPathString(localVarUrlObj),
@@ -194,15 +225,15 @@ export const TransactionsApiAxiosParamCreator = function (configuration?: Config
             };
         },
         /**
-         * Submits a new CBDC transaction request to the controller for compliance evaluation and execution.
+         * Submits a new CBDC transaction request to the controller for compliance evaluation and execution. The request body must be a `SignedEnvelope` whose inner payload is an `InitiateTransactionPayload`. The 200/202 response body is a `SignedEnvelope` whose inner payload is an `InitiateTransactionResponsePayload`, bound to the request\'s nonce.
          * @summary Initiate a cross-ledger CBDC transaction.
-         * @param {InitiateTransactionRequest} initiateTransactionRequest 
+         * @param {SignedEnvelope} signedEnvelope 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        initiateTransactionV1: async (initiateTransactionRequest: InitiateTransactionRequest, options: AxiosRequestConfig = {}): Promise<RequestArgs> => {
-            // verify required parameter 'initiateTransactionRequest' is not null or undefined
-            assertParamExists('initiateTransactionV1', 'initiateTransactionRequest', initiateTransactionRequest)
+        initiateTransactionV1: async (signedEnvelope: SignedEnvelope, options: AxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'signedEnvelope' is not null or undefined
+            assertParamExists('initiateTransactionV1', 'signedEnvelope', signedEnvelope)
             const localVarPath = `/api/v1/plugins/@hyperledger-cacti/cacti-plugin-cbdc-controller/initiate-transaction`;
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
@@ -222,7 +253,7 @@ export const TransactionsApiAxiosParamCreator = function (configuration?: Config
             setSearchParams(localVarUrlObj, localVarQueryParameter);
             let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
             localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
-            localVarRequestOptions.data = serializeDataIfNeeded(initiateTransactionRequest, localVarRequestOptions, configuration)
+            localVarRequestOptions.data = serializeDataIfNeeded(signedEnvelope, localVarRequestOptions, configuration)
 
             return {
                 url: toPathString(localVarUrlObj),
@@ -240,25 +271,25 @@ export const TransactionsApiFp = function(configuration?: Configuration) {
     const localVarAxiosParamCreator = TransactionsApiAxiosParamCreator(configuration)
     return {
         /**
-         * Confirms a transaction so the controller proceeds with execution.
+         * Confirms a transaction so the controller proceeds with execution. The request body must be a `SignedEnvelope` whose inner payload is an `AcceptTransactionPayload`. Only the partner that initiated the transaction may accept it. The 200 response body is a `SignedEnvelope` whose inner payload is an `AcceptTransactionResponsePayload`, bound to the request\'s nonce.
          * @summary Accept a transaction previously marked for review.
-         * @param {AcceptTransactionRequest} acceptTransactionRequest 
+         * @param {SignedEnvelope} signedEnvelope 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async acceptTransactionV1(acceptTransactionRequest: AcceptTransactionRequest, options?: AxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<AcceptTransactionResponse>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.acceptTransactionV1(acceptTransactionRequest, options);
+        async acceptTransactionV1(signedEnvelope: SignedEnvelope, options?: AxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<SignedEnvelope>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.acceptTransactionV1(signedEnvelope, options);
             return createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration);
         },
         /**
-         * Submits a new CBDC transaction request to the controller for compliance evaluation and execution.
+         * Submits a new CBDC transaction request to the controller for compliance evaluation and execution. The request body must be a `SignedEnvelope` whose inner payload is an `InitiateTransactionPayload`. The 200/202 response body is a `SignedEnvelope` whose inner payload is an `InitiateTransactionResponsePayload`, bound to the request\'s nonce.
          * @summary Initiate a cross-ledger CBDC transaction.
-         * @param {InitiateTransactionRequest} initiateTransactionRequest 
+         * @param {SignedEnvelope} signedEnvelope 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async initiateTransactionV1(initiateTransactionRequest: InitiateTransactionRequest, options?: AxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<InitiateTransactionResponse>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.initiateTransactionV1(initiateTransactionRequest, options);
+        async initiateTransactionV1(signedEnvelope: SignedEnvelope, options?: AxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<SignedEnvelope>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.initiateTransactionV1(signedEnvelope, options);
             return createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration);
         },
     }
@@ -272,24 +303,24 @@ export const TransactionsApiFactory = function (configuration?: Configuration, b
     const localVarFp = TransactionsApiFp(configuration)
     return {
         /**
-         * Confirms a transaction so the controller proceeds with execution.
+         * Confirms a transaction so the controller proceeds with execution. The request body must be a `SignedEnvelope` whose inner payload is an `AcceptTransactionPayload`. Only the partner that initiated the transaction may accept it. The 200 response body is a `SignedEnvelope` whose inner payload is an `AcceptTransactionResponsePayload`, bound to the request\'s nonce.
          * @summary Accept a transaction previously marked for review.
-         * @param {AcceptTransactionRequest} acceptTransactionRequest 
+         * @param {SignedEnvelope} signedEnvelope 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        acceptTransactionV1(acceptTransactionRequest: AcceptTransactionRequest, options?: any): AxiosPromise<AcceptTransactionResponse> {
-            return localVarFp.acceptTransactionV1(acceptTransactionRequest, options).then((request) => request(axios, basePath));
+        acceptTransactionV1(signedEnvelope: SignedEnvelope, options?: any): AxiosPromise<SignedEnvelope> {
+            return localVarFp.acceptTransactionV1(signedEnvelope, options).then((request) => request(axios, basePath));
         },
         /**
-         * Submits a new CBDC transaction request to the controller for compliance evaluation and execution.
+         * Submits a new CBDC transaction request to the controller for compliance evaluation and execution. The request body must be a `SignedEnvelope` whose inner payload is an `InitiateTransactionPayload`. The 200/202 response body is a `SignedEnvelope` whose inner payload is an `InitiateTransactionResponsePayload`, bound to the request\'s nonce.
          * @summary Initiate a cross-ledger CBDC transaction.
-         * @param {InitiateTransactionRequest} initiateTransactionRequest 
+         * @param {SignedEnvelope} signedEnvelope 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        initiateTransactionV1(initiateTransactionRequest: InitiateTransactionRequest, options?: any): AxiosPromise<InitiateTransactionResponse> {
-            return localVarFp.initiateTransactionV1(initiateTransactionRequest, options).then((request) => request(axios, basePath));
+        initiateTransactionV1(signedEnvelope: SignedEnvelope, options?: any): AxiosPromise<SignedEnvelope> {
+            return localVarFp.initiateTransactionV1(signedEnvelope, options).then((request) => request(axios, basePath));
         },
     };
 };
@@ -302,27 +333,27 @@ export const TransactionsApiFactory = function (configuration?: Configuration, b
  */
 export class TransactionsApi extends BaseAPI {
     /**
-     * Confirms a transaction so the controller proceeds with execution.
+     * Confirms a transaction so the controller proceeds with execution. The request body must be a `SignedEnvelope` whose inner payload is an `AcceptTransactionPayload`. Only the partner that initiated the transaction may accept it. The 200 response body is a `SignedEnvelope` whose inner payload is an `AcceptTransactionResponsePayload`, bound to the request\'s nonce.
      * @summary Accept a transaction previously marked for review.
-     * @param {AcceptTransactionRequest} acceptTransactionRequest 
+     * @param {SignedEnvelope} signedEnvelope 
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      * @memberof TransactionsApi
      */
-    public acceptTransactionV1(acceptTransactionRequest: AcceptTransactionRequest, options?: AxiosRequestConfig) {
-        return TransactionsApiFp(this.configuration).acceptTransactionV1(acceptTransactionRequest, options).then((request) => request(this.axios, this.basePath));
+    public acceptTransactionV1(signedEnvelope: SignedEnvelope, options?: AxiosRequestConfig) {
+        return TransactionsApiFp(this.configuration).acceptTransactionV1(signedEnvelope, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**
-     * Submits a new CBDC transaction request to the controller for compliance evaluation and execution.
+     * Submits a new CBDC transaction request to the controller for compliance evaluation and execution. The request body must be a `SignedEnvelope` whose inner payload is an `InitiateTransactionPayload`. The 200/202 response body is a `SignedEnvelope` whose inner payload is an `InitiateTransactionResponsePayload`, bound to the request\'s nonce.
      * @summary Initiate a cross-ledger CBDC transaction.
-     * @param {InitiateTransactionRequest} initiateTransactionRequest 
+     * @param {SignedEnvelope} signedEnvelope 
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      * @memberof TransactionsApi
      */
-    public initiateTransactionV1(initiateTransactionRequest: InitiateTransactionRequest, options?: AxiosRequestConfig) {
-        return TransactionsApiFp(this.configuration).initiateTransactionV1(initiateTransactionRequest, options).then((request) => request(this.axios, this.basePath));
+    public initiateTransactionV1(signedEnvelope: SignedEnvelope, options?: AxiosRequestConfig) {
+        return TransactionsApiFp(this.configuration).initiateTransactionV1(signedEnvelope, options).then((request) => request(this.axios, this.basePath));
     }
 }
 

@@ -2,7 +2,7 @@
 /* eslint-disable */
 /**
  * Hyperledger Cacti Plugin - CBDC Interoperability Controller
- * OpenAPI specification for the CBDC Interoperability Controller plugin. Exposes endpoints to initiate and accept cross-ledger CBDC transactions.
+ * OpenAPI specification for the CBDC Interoperability Controller plugin. Exposes endpoints to initiate and accept cross-ledger CBDC transactions. Every request and successful response is a signed envelope; payload schemas describe the inner content that goes inside the envelope\'s `signed` field.
  *
  * The version of the OpenAPI document: 0.0.1
  * 
