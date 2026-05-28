@@ -1,0 +1,283 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Cacti CBDC Example Partner API",
+    "version": "0.0.1",
+    "description": "Commercial-bank partner facing API for the CBDC example backend"
+  },
+  "servers": [{ "url": "/" }],
+  "paths": {
+    "/auth/login": {
+      "post": {
+        "operationId": "login",
+        "tags": ["auth"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/LoginRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Logged in",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/MeResponse" }
+              }
+            }
+          },
+          "401": { "description": "Invalid credentials" }
+        }
+      }
+    },
+    "/auth/register": {
+      "post": {
+        "operationId": "register",
+        "tags": ["auth"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RegisterRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/MeResponse" }
+              }
+            }
+          },
+          "409": { "description": "User already exists" }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "operationId": "logout",
+        "tags": ["auth"],
+        "responses": { "204": { "description": "Logged out" } }
+      }
+    },
+    "/me": {
+      "get": {
+        "operationId": "getMe",
+        "tags": ["customer"],
+        "responses": {
+          "200": {
+            "description": "Current customer",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/MeResponse" }
+              }
+            }
+          },
+          "401": { "description": "Not authenticated" }
+        }
+      }
+    },
+    "/balance": {
+      "get": {
+        "operationId": "getBalance",
+        "tags": ["customer"],
+        "parameters": [
+          {
+            "name": "chain",
+            "in": "query",
+            "required": true,
+            "schema": { "$ref": "#/components/schemas/ChainCode" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Balance",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/BalanceResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/transactions": {
+      "get": {
+        "operationId": "listTransactions",
+        "tags": ["transactions"],
+        "responses": {
+          "200": {
+            "description": "Transactions for current customer",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/PartnerTransaction" }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createTransaction",
+        "tags": ["transactions"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateTransactionRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Transaction submitted",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PartnerTransaction" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/transactions/{id}/accept": {
+      "post": {
+        "operationId": "acceptTransaction",
+        "tags": ["transactions"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PartnerTransaction" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/compliance/check": {
+      "post": {
+        "operationId": "complianceCheck",
+        "tags": ["compliance"],
+        "description": "Signed-envelope endpoint called by a CBDC controller",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "type": "object" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Signed envelope response",
+            "content": { "application/json": { "schema": { "type": "object" } } }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ChainCode": {
+        "type": "string",
+        "enum": ["besu", "ethereum"]
+      },
+      "LoginRequest": {
+        "type": "object",
+        "required": ["taxId", "password"],
+        "properties": {
+          "taxId": { "type": "string" },
+          "password": { "type": "string" }
+        }
+      },
+      "RegisterRequest": {
+        "type": "object",
+        "required": ["taxId", "password", "displayName"],
+        "properties": {
+          "taxId": { "type": "string" },
+          "password": { "type": "string" },
+          "displayName": { "type": "string" }
+        }
+      },
+      "MeResponse": {
+        "type": "object",
+        "required": ["id", "taxId", "displayName", "ledgerAccounts"],
+        "properties": {
+          "id": { "type": "string" },
+          "taxId": { "type": "string" },
+          "displayName": { "type": "string" },
+          "ledgerAccounts": {
+            "type": "object",
+            "additionalProperties": { "type": "string" }
+          }
+        }
+      },
+      "BalanceResponse": {
+        "type": "object",
+        "required": ["chain", "account", "balance"],
+        "properties": {
+          "chain": { "$ref": "#/components/schemas/ChainCode" },
+          "account": { "type": "string" },
+          "balance": { "type": "string" }
+        }
+      },
+      "CreateTransactionRequest": {
+        "type": "object",
+        "required": [
+          "sourceChain",
+          "destinationChain",
+          "receiverAddress",
+          "amount"
+        ],
+        "properties": {
+          "sourceChain": { "$ref": "#/components/schemas/ChainCode" },
+          "destinationChain": { "$ref": "#/components/schemas/ChainCode" },
+          "receiverAddress": { "type": "string" },
+          "amount": { "type": "number" },
+          "complianceProviders": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "timeToExpireSeconds": { "type": "integer", "minimum": 60 }
+        }
+      },
+      "PartnerTransaction": {
+        "type": "object",
+        "required": [
+          "id",
+          "controllerTransactionId",
+          "sourceChain",
+          "destinationChain",
+          "receiverAddress",
+          "amount",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": { "type": "string" },
+          "controllerTransactionId": { "type": "string" },
+          "sourceChain": { "$ref": "#/components/schemas/ChainCode" },
+          "destinationChain": { "$ref": "#/components/schemas/ChainCode" },
+          "receiverAddress": { "type": "string" },
+          "amount": { "type": "number" },
+          "status": { "type": "string" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      }
+    }
+  }
+}

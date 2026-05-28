@@ -1,0 +1,84 @@
+{
+  "name": "@hyperledger-cacti/cacti-example-cbdc-backend",
+  "version": "0.0.1",
+  "description": "CBDC example backend: central banks (CBDC controllers) and commercial-bank partners",
+  "packageManager": "yarn@4.3.1",
+  "license": "Apache-2.0",
+  "main": "dist/lib/main/typescript/index.js",
+  "module": "dist/lib/main/typescript/index.js",
+  "types": "dist/lib/main/typescript/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/lib/main/typescript/index.d.ts",
+      "default": "./dist/lib/main/typescript/index.js"
+    }
+  },
+  "files": [
+    "dist/lib/main/**/*"
+  ],
+  "scripts": {
+    "build": "run-s codegen tsc",
+    "tsc": "tsc --project ./tsconfig.json",
+    "lint": "eslint --config ./eslint.config.mjs '**/*.{js,ts}' --quiet --fix",
+    "codegen": "run-s codegen:openapi",
+    "codegen:openapi": "openapi-generator-cli generate -i ./src/main/json/openapi.json -g typescript-axios -o ./src/main/typescript/generated/openapi/typescript-axios/ --reserved-words-mappings protected=protected --enable-post-process-file",
+    "setup": "ts-node --transpile-only src/main/typescript/entry/setup.ts",
+    "teardown": "ts-node --transpile-only src/main/typescript/entry/teardown.ts",
+    "start:central-bank": "ts-node --transpile-only src/main/typescript/entry/central-bank.ts",
+    "start:partner": "ts-node --transpile-only src/main/typescript/entry/partner.ts",
+    "all-in-one": "NODE_ENV=default ENVIRONMENT=default ts-node --transpile-only src/main/typescript/entry/all-in-one.ts",
+    "dev": "concurrently -k -n cb-besu,cb-eth,partner-a,partner-b 'CBDC_CONFIG=./runtime/cb-besu.json yarn start:central-bank' 'CBDC_CONFIG=./runtime/cb-eth.json yarn start:central-bank' 'CBDC_CONFIG=./runtime/partner-a.json yarn start:partner' 'CBDC_CONFIG=./runtime/partner-b.json yarn start:partner'",
+    "test": "jest ./src/test/typescript"
+  },
+  "dependencies": {
+    "@hyperledger-cacti/cacti-plugin-cbdc-controller": "workspace:^",
+    "@hyperledger/cactus-common": "workspace:^",
+    "@hyperledger/cactus-core": "workspace:^",
+    "@hyperledger/cactus-core-api": "workspace:^",
+    "@hyperledger/cactus-plugin-keychain-memory": "workspace:^",
+    "@hyperledger/cactus-plugin-ledger-connector-besu": "workspace:^",
+    "@hyperledger/cactus-plugin-ledger-connector-ethereum": "workspace:^",
+    "@hyperledger/cactus-plugin-satp-hermes": "workspace:^",
+    "async-exit-hook": "^2.0.1",
+    "axios": "^1.14.0",
+    "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^11.3.0",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
+    "dockerode": "^4.0.10",
+    "express": "^5.2.1",
+    "knex": "2.4.0",
+    "sqlite3": "^5.1.7",
+    "uuid": "^14.0.0",
+    "web3": "1.6.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@hyperledger/cactus-test-geth-ledger": "workspace:^",
+    "@hyperledger/cactus-test-tooling": "workspace:^",
+    "@jest/globals": "^30.3.0",
+    "@openapitools/openapi-generator-cli": "2.7.0",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/cookie-parser": "^1.4.7",
+    "@types/cors": "^2",
+    "@types/dockerode": "^4",
+    "@types/express": "^5",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^25.9.1",
+    "concurrently": "^8.2.2",
+    "eslint": "^10.4.0",
+    "eslint-plugin-prettier": "^5.5.6",
+    "jest": "^30.3.0",
+    "jest-util": "^30.3.0",
+    "npm-run-all": "4.1.5",
+    "prettier": "^3.8.3",
+    "ts-jest": "^29.4.6",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">= 20"
+  }
+}
