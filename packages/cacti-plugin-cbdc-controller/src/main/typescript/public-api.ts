@@ -30,6 +30,27 @@ export {
 } from "./core/fx-provision";
 
 export {
+  COMPLIANCE_SECRET_MIN_BYTES,
+  COMPLIANCE_SIGNING_VERSION,
+  COMPLIANCE_TIMESTAMP_WINDOW_MS,
+  COMPLIANCE_NONCE_TTL_MS,
+  ComplianceSigningError,
+  ISignedEnvelope,
+  ISignedRequest,
+  IVerifiedRequest,
+  NonceCache,
+  assertSecretStrength,
+  generateComplianceProviderSecret,
+  generateNonce,
+  signRequest,
+  signResponse,
+  verifyRequest,
+  verifyResponse,
+} from "./core/compliance-signing";
+
+export { ICBDCControllerOptions } from "./core/cbdc-controller";
+
+export {
   ILedgerEnvironment,
   IInfrastructure,
   IRequestOptions,

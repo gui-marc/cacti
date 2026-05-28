@@ -5,6 +5,7 @@ import CBDCController from "../../../main/typescript/core/cbdc-controller";
 import ConstantFxProvisionStrategy from "../../../test/typescript/fx-provision/constant-fx-provision-strategy";
 import { InMemoryComplianceProvidersStore } from "../../../main/typescript/store/compliance-providers-store";
 import { DummyComplianceProvider } from "../../../test/typescript/compliance/dummy-compliance-provider";
+import { generateComplianceProviderSecret } from "../../../main/typescript/core/compliance-signing";
 import {
   ComplianceResult,
   ILedgerEnvironment,
@@ -28,14 +29,16 @@ const log = LoggerProvider.getOrCreate({
 describe("Transaction Controller", () => {
   const transactionStore = new InMemoryTransactionStore();
   const complianceStoreProvider = new InMemoryComplianceProvidersStore();
+  const complianceProviderSecret = generateComplianceProviderSecret();
   const complianceProvider = new DummyComplianceProvider({
     port: 8081,
+    apiKey: complianceProviderSecret,
     nextCheckResponse: ComplianceResult.APPROVED,
   });
 
   complianceStoreProvider.save({
     id: "dummy-compliance-provider",
-    apiKey: "dummy-api-key",
+    apiKey: complianceProviderSecret,
     endpoint: complianceProvider.getEndpointUrl(),
   });
 
@@ -131,6 +134,7 @@ describe("Transaction Controller", () => {
         },
       },
       logLevel,
+      { requireHttps: false },
     );
 
     await controller.initiateTransaction({
@@ -158,6 +162,7 @@ describe("Transaction Controller", () => {
         },
       },
       logLevel,
+      { requireHttps: false },
     );
 
     const promise = controller.initiateTransaction({
@@ -187,6 +192,7 @@ describe("Transaction Controller", () => {
         },
       },
       logLevel,
+      { requireHttps: false },
     );
 
     it("should pause without performing SATP transfer when a provider marks for review", async () => {
@@ -256,6 +262,7 @@ describe("Transaction Controller", () => {
         },
       },
       logLevel,
+      { requireHttps: false },
     );
 
     beforeEach(() => {

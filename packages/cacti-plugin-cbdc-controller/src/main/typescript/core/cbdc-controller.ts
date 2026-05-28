@@ -14,6 +14,16 @@ import { ComplianceProvidersStore } from "../store/compliance-providers-store";
 import { FXProvisionStrategy } from "./fx-provision";
 import axios from "axios";
 import { Logger, LogLevelDesc } from "@hyperledger/cactus-common";
+import {
+  ComplianceSigningError,
+  ISignedEnvelope,
+  signRequest,
+  verifyResponse,
+} from "./compliance-signing";
+
+export interface ICBDCControllerOptions {
+  requireHttps?: boolean;
+}
 
 export default class CBDCController {
   private readonly log: Logger;
@@ -22,6 +32,7 @@ export default class CBDCController {
   private readonly fxProvisionStrategy: FXProvisionStrategy;
   private readonly complianceProvidersStore: ComplianceProvidersStore;
   private readonly infrastructure: IInfrastructure;
+  private readonly requireHttps: boolean;
   // TODO: Crash recovery mechanism to handle server restarts and ensure pending transactions are not lost
   private readonly expiryTimers: Map<string, NodeJS.Timeout> = new Map();
 
@@ -31,11 +42,13 @@ export default class CBDCController {
     complianceProvidersStore: ComplianceProvidersStore,
     infrastructure: IInfrastructure,
     logLevel: LogLevelDesc = "INFO",
+    options: ICBDCControllerOptions = {},
   ) {
     this.store = store;
     this.fxProvisionStrategy = fxProvisionStrategy;
     this.complianceProvidersStore = complianceProvidersStore;
     this.infrastructure = infrastructure;
+    this.requireHttps = options.requireHttps ?? true;
     this.log = new Logger({ label: "CBDCController", level: logLevel });
   }
 
@@ -272,53 +285,22 @@ export default class CBDCController {
     );
 
     const results = await Promise.all(
-      complianceProviders.map(async (provider) => {
-        try {
-          return await axios.post<IGetComplianceCheckResponse>(
-            provider.endpoint,
-            {
-              transactionId,
-              sourceChainCode: transaction.sourceChainCode,
-              destinationChainCode: transaction.destinationChainCode,
-              senderAddress: transaction.senderAddress,
-              receiverAddress: transaction.receiverAddress,
-              amount: transaction.amount,
-            },
-          );
-        } catch (error) {
-          console.error(
-            `Error requesting compliance check from provider ${provider.id} for transaction ${transactionId}, skipping:`,
-            error,
-          );
-        }
-      }),
+      complianceProviders.map((provider) =>
+        this.callComplianceProvider(provider, transaction),
+      ),
     );
 
     let worstResult = ComplianceResult.APPROVED;
-
-    results
-      .filter((r) => r !== undefined)
-      .forEach((response) => {
-        if (response && response.status === 200) {
-          const { transactionId, result } = response.data;
-
-          if (transactionId !== transaction.id) {
-            console.warn(
-              `Received compliance check response for transaction ${transactionId} but expected. Skipping ${transaction.id}`,
-            );
-            return;
-          }
-
-          if (result === ComplianceResult.REJECTED) {
-            worstResult = ComplianceResult.REJECTED;
-          } else if (
-            result === ComplianceResult.MARKED_FOR_REVIEW &&
-            worstResult !== ComplianceResult.REJECTED
-          ) {
-            worstResult = ComplianceResult.MARKED_FOR_REVIEW;
-          }
-        }
-      });
+    for (const result of results) {
+      if (result === ComplianceResult.REJECTED) {
+        worstResult = ComplianceResult.REJECTED;
+      } else if (
+        result === ComplianceResult.MARKED_FOR_REVIEW &&
+        worstResult !== ComplianceResult.REJECTED
+      ) {
+        worstResult = ComplianceResult.MARKED_FOR_REVIEW;
+      }
+    }
 
     await this.store.update(transactionId, {
       ...transaction,
@@ -326,6 +308,76 @@ export default class CBDCController {
     });
 
     return worstResult;
+  }
+
+  private async callComplianceProvider(
+    provider: IComplianceProvider,
+    transaction: ITransaction,
+  ): Promise<ComplianceResult | undefined> {
+    if (this.requireHttps && !provider.endpoint.startsWith("https://")) {
+      this.log.error(
+        `Refusing to call compliance provider ${provider.id}: endpoint ${provider.endpoint} is not https (requireHttps=true). Counting as REJECTED.`,
+      );
+      return ComplianceResult.REJECTED;
+    }
+
+    const payload = {
+      transactionId: transaction.id,
+      sourceChainCode: transaction.sourceChainCode,
+      destinationChainCode: transaction.destinationChainCode,
+      senderAddress: transaction.senderAddress,
+      receiverAddress: transaction.receiverAddress,
+      amount: transaction.amount,
+    };
+
+    const { envelope, nonce } = signRequest(provider.apiKey, payload);
+
+    let responseEnvelope: ISignedEnvelope;
+    try {
+      const httpResponse = await axios.post<ISignedEnvelope>(
+        provider.endpoint,
+        envelope,
+      );
+      if (httpResponse.status !== 200 || !httpResponse.data) {
+        this.log.error(
+          `Compliance provider ${provider.id} returned status ${httpResponse.status} for transaction ${transaction.id}, skipping`,
+        );
+        return undefined;
+      }
+      responseEnvelope = httpResponse.data;
+    } catch (error) {
+      this.log.error(
+        `Error requesting compliance check from provider ${provider.id} for transaction ${transaction.id}, skipping:`,
+        error,
+      );
+      return undefined;
+    }
+
+    let verified: IGetComplianceCheckResponse;
+    try {
+      verified = verifyResponse<IGetComplianceCheckResponse>(
+        provider.apiKey,
+        nonce,
+        responseEnvelope,
+      );
+    } catch (error) {
+      const code =
+        error instanceof ComplianceSigningError ? error.code : "UNKNOWN";
+      this.log.error(
+        `SECURITY: compliance response from provider ${provider.id} for transaction ${transaction.id} failed verification (${code}). Counting as REJECTED.`,
+        error,
+      );
+      return ComplianceResult.REJECTED;
+    }
+
+    if (verified.transactionId !== transaction.id) {
+      this.log.error(
+        `SECURITY: provider ${provider.id} returned response for transaction ${verified.transactionId} but expected ${transaction.id}. Counting as REJECTED.`,
+      );
+      return ComplianceResult.REJECTED;
+    }
+
+    return verified.result;
   }
 
   private async performSATPTransfer(

@@ -1,4 +1,5 @@
 import { IComplianceProvider } from "../types";
+import { assertSecretStrength } from "../core/compliance-signing";
 
 export abstract class ComplianceProvidersStore {
   abstract getAll(): Promise<IComplianceProvider[]>;
@@ -10,6 +11,10 @@ export abstract class ComplianceProvidersStore {
     update: IComplianceProvider,
   ): Promise<void>;
   abstract delete(providerId: string): Promise<void>;
+
+  protected validate(provider: IComplianceProvider): void {
+    assertSecretStrength(provider.apiKey);
+  }
 }
 
 export class InMemoryComplianceProvidersStore extends ComplianceProvidersStore {
@@ -21,6 +26,7 @@ export class InMemoryComplianceProvidersStore extends ComplianceProvidersStore {
   }
 
   async save(provider: IComplianceProvider): Promise<void> {
+    this.validate(provider);
     this.providers.set(provider.id, provider);
   }
 
@@ -42,6 +48,7 @@ export class InMemoryComplianceProvidersStore extends ComplianceProvidersStore {
     if (!this.providers.has(providerId)) {
       throw new Error(`Compliance provider with id ${providerId} not found`);
     }
+    this.validate(update);
     this.providers.set(providerId, update);
   }
 

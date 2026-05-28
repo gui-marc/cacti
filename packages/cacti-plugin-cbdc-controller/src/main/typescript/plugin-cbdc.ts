@@ -26,6 +26,7 @@ export interface IPluginCBDCOptions extends ICactusPluginOptions {
   transactionStore: TransactionStore;
   fxProvisionStrategy: FXProvisionStrategy;
   complianceProvidersStore: ComplianceProvidersStore;
+  requireHttps?: boolean;
 }
 
 export class PluginCBDCController implements ICactusPlugin {
@@ -60,6 +61,8 @@ export class PluginCBDCController implements ICactusPlugin {
       this.options.fxProvisionStrategy,
       this.options.complianceProvidersStore,
       this.infrastructure,
+      this.logLevel,
+      { requireHttps: this.options.requireHttps },
     );
   }
 

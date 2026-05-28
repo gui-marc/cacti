@@ -64,6 +64,7 @@ import {
   DummyBesuRFQEnvironment,
 } from "../fx-provision/besu-rfq";
 import { DummyComplianceProvider } from "../compliance/dummy-compliance-provider";
+import { generateComplianceProviderSecret } from "../../../main/typescript/core/compliance-signing";
 import SATPTokenContract from "../../solidity/generated/SATPTokenContract.sol/SATPTokenContract.json";
 
 const logLevel: LogLevelDesc = "DEBUG";
@@ -78,6 +79,7 @@ const monitorService = MonitorService.createOrGetMonitorService({
 const SOURCE_CHAIN_CODE = "besu";
 const DESTINATION_CHAIN_CODE = "ethereum";
 const COMPLIANCE_PROVIDER_PORT = 3030;
+const COMPLIANCE_PROVIDER_SECRET = generateComplianceProviderSecret();
 const RATE_NUM = 4n;
 const RATE_DEN = 5n;
 
@@ -288,6 +290,7 @@ beforeAll(async () => {
 
   complianceProvider = new DummyComplianceProvider({
     port: COMPLIANCE_PROVIDER_PORT,
+    apiKey: COMPLIANCE_PROVIDER_SECRET,
   });
   await complianceProvider.start();
 }, TIMEOUT);
@@ -390,7 +393,7 @@ describe("CBDC controller using BesuRFQFXProvisionStrategy", () => {
       await complianceProvidersStore.save({
         id: complianceProviderId,
         endpoint: complianceProvider.getEndpointUrl(),
-        apiKey: "test",
+        apiKey: COMPLIANCE_PROVIDER_SECRET,
       });
 
       const cbdcPlugin = await cbdcFactory.create({
@@ -400,6 +403,7 @@ describe("CBDC controller using BesuRFQFXProvisionStrategy", () => {
         transactionStore: new InMemoryTransactionStore(),
         environments: { besu: besuCBDCEnv, ethereum: ethereumCBDCEnv },
         logLevel,
+        requireHttps: false,
       });
       await cbdcPlugin.onPluginInit();
 
