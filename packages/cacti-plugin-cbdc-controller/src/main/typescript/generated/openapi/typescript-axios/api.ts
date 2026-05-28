@@ -63,6 +63,50 @@ export const AcceptTransactionResponsePayloadStatusEnum = {
 export type AcceptTransactionResponsePayloadStatusEnum = typeof AcceptTransactionResponsePayloadStatusEnum[keyof typeof AcceptTransactionResponsePayloadStatusEnum];
 
 /**
+ * Inner payload of a signed add-compliance-endpoint request.
+ * @export
+ * @interface AddComplianceEndpointPayload
+ */
+export interface AddComplianceEndpointPayload {
+    /**
+     * Identifier of the partner that owns this compliance endpoint. Must exist in the partners store.
+     * @type {string}
+     * @memberof AddComplianceEndpointPayload
+     */
+    'partnerId': string;
+    /**
+     * HTTPS URL of the compliance provider endpoint.
+     * @type {string}
+     * @memberof AddComplianceEndpointPayload
+     */
+    'url': string;
+}
+/**
+ * Inner payload of the signed add-compliance-endpoint response.
+ * @export
+ * @interface AddComplianceEndpointResponsePayload
+ */
+export interface AddComplianceEndpointResponsePayload {
+    /**
+     * Server-generated UUID identifying the registered compliance endpoint.
+     * @type {string}
+     * @memberof AddComplianceEndpointResponsePayload
+     */
+    'id': string;
+    /**
+     * Identifier of the partner that owns this compliance endpoint.
+     * @type {string}
+     * @memberof AddComplianceEndpointResponsePayload
+     */
+    'partnerId': string;
+    /**
+     * HTTPS URL of the compliance provider endpoint.
+     * @type {string}
+     * @memberof AddComplianceEndpointResponsePayload
+     */
+    'url': string;
+}
+/**
  * Unsigned error response. 4xx/5xx responses are not enveloped because the sender\'s identity (or shared secret) may be unknown or in dispute.
  * @export
  * @interface ErrorResponse
@@ -181,6 +225,189 @@ export interface SignedEnvelope {
      */
     'sig': string;
 }
+
+/**
+ * ComplianceApi - axios parameter creator
+ * @export
+ */
+export const ComplianceApiAxiosParamCreator = function (configuration?: Configuration) {
+    return {
+        /**
+         * Adds a new compliance provider endpoint to the controller\'s store. The server generates the endpoint\'s id. The request body must be a `SignedEnvelope` whose inner payload is an `AddComplianceEndpointPayload`. The 201 response body is a `SignedEnvelope` whose inner payload is an `AddComplianceEndpointResponsePayload`.
+         * @summary Register a compliance endpoint.
+         * @param {SignedEnvelope} signedEnvelope 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        addComplianceEndpointV1: async (signedEnvelope: SignedEnvelope, options: AxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'signedEnvelope' is not null or undefined
+            assertParamExists('addComplianceEndpointV1', 'signedEnvelope', signedEnvelope)
+            const localVarPath = `/api/v1/plugins/@hyperledger-cacti/cacti-plugin-cbdc-controller/compliance-endpoint`;
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'POST', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+
+    
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+            localVarRequestOptions.data = serializeDataIfNeeded(signedEnvelope, localVarRequestOptions, configuration)
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * Deletes a previously registered compliance provider endpoint by its id. The request body must be a `SignedEnvelope` with an empty payload (used only for authentication). Returns 204 No Content on success.
+         * @summary Remove a compliance endpoint.
+         * @param {string} id The server-generated UUID of the compliance endpoint to remove.
+         * @param {SignedEnvelope} signedEnvelope 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        removeComplianceEndpointV1: async (id: string, signedEnvelope: SignedEnvelope, options: AxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'id' is not null or undefined
+            assertParamExists('removeComplianceEndpointV1', 'id', id)
+            // verify required parameter 'signedEnvelope' is not null or undefined
+            assertParamExists('removeComplianceEndpointV1', 'signedEnvelope', signedEnvelope)
+            const localVarPath = `/api/v1/plugins/@hyperledger-cacti/cacti-plugin-cbdc-controller/compliance-endpoint/{id}`
+                .replace(`{${"id"}}`, encodeURIComponent(String(id)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'DELETE', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+
+    
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+            localVarRequestOptions.data = serializeDataIfNeeded(signedEnvelope, localVarRequestOptions, configuration)
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+    }
+};
+
+/**
+ * ComplianceApi - functional programming interface
+ * @export
+ */
+export const ComplianceApiFp = function(configuration?: Configuration) {
+    const localVarAxiosParamCreator = ComplianceApiAxiosParamCreator(configuration)
+    return {
+        /**
+         * Adds a new compliance provider endpoint to the controller\'s store. The server generates the endpoint\'s id. The request body must be a `SignedEnvelope` whose inner payload is an `AddComplianceEndpointPayload`. The 201 response body is a `SignedEnvelope` whose inner payload is an `AddComplianceEndpointResponsePayload`.
+         * @summary Register a compliance endpoint.
+         * @param {SignedEnvelope} signedEnvelope 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async addComplianceEndpointV1(signedEnvelope: SignedEnvelope, options?: AxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<SignedEnvelope>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.addComplianceEndpointV1(signedEnvelope, options);
+            return createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration);
+        },
+        /**
+         * Deletes a previously registered compliance provider endpoint by its id. The request body must be a `SignedEnvelope` with an empty payload (used only for authentication). Returns 204 No Content on success.
+         * @summary Remove a compliance endpoint.
+         * @param {string} id The server-generated UUID of the compliance endpoint to remove.
+         * @param {SignedEnvelope} signedEnvelope 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async removeComplianceEndpointV1(id: string, signedEnvelope: SignedEnvelope, options?: AxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.removeComplianceEndpointV1(id, signedEnvelope, options);
+            return createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration);
+        },
+    }
+};
+
+/**
+ * ComplianceApi - factory interface
+ * @export
+ */
+export const ComplianceApiFactory = function (configuration?: Configuration, basePath?: string, axios?: AxiosInstance) {
+    const localVarFp = ComplianceApiFp(configuration)
+    return {
+        /**
+         * Adds a new compliance provider endpoint to the controller\'s store. The server generates the endpoint\'s id. The request body must be a `SignedEnvelope` whose inner payload is an `AddComplianceEndpointPayload`. The 201 response body is a `SignedEnvelope` whose inner payload is an `AddComplianceEndpointResponsePayload`.
+         * @summary Register a compliance endpoint.
+         * @param {SignedEnvelope} signedEnvelope 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        addComplianceEndpointV1(signedEnvelope: SignedEnvelope, options?: any): AxiosPromise<SignedEnvelope> {
+            return localVarFp.addComplianceEndpointV1(signedEnvelope, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * Deletes a previously registered compliance provider endpoint by its id. The request body must be a `SignedEnvelope` with an empty payload (used only for authentication). Returns 204 No Content on success.
+         * @summary Remove a compliance endpoint.
+         * @param {string} id The server-generated UUID of the compliance endpoint to remove.
+         * @param {SignedEnvelope} signedEnvelope 
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        removeComplianceEndpointV1(id: string, signedEnvelope: SignedEnvelope, options?: any): AxiosPromise<void> {
+            return localVarFp.removeComplianceEndpointV1(id, signedEnvelope, options).then((request) => request(axios, basePath));
+        },
+    };
+};
+
+/**
+ * ComplianceApi - object-oriented interface
+ * @export
+ * @class ComplianceApi
+ * @extends {BaseAPI}
+ */
+export class ComplianceApi extends BaseAPI {
+    /**
+     * Adds a new compliance provider endpoint to the controller\'s store. The server generates the endpoint\'s id. The request body must be a `SignedEnvelope` whose inner payload is an `AddComplianceEndpointPayload`. The 201 response body is a `SignedEnvelope` whose inner payload is an `AddComplianceEndpointResponsePayload`.
+     * @summary Register a compliance endpoint.
+     * @param {SignedEnvelope} signedEnvelope 
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ComplianceApi
+     */
+    public addComplianceEndpointV1(signedEnvelope: SignedEnvelope, options?: AxiosRequestConfig) {
+        return ComplianceApiFp(this.configuration).addComplianceEndpointV1(signedEnvelope, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * Deletes a previously registered compliance provider endpoint by its id. The request body must be a `SignedEnvelope` with an empty payload (used only for authentication). Returns 204 No Content on success.
+     * @summary Remove a compliance endpoint.
+     * @param {string} id The server-generated UUID of the compliance endpoint to remove.
+     * @param {SignedEnvelope} signedEnvelope 
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ComplianceApi
+     */
+    public removeComplianceEndpointV1(id: string, signedEnvelope: SignedEnvelope, options?: AxiosRequestConfig) {
+        return ComplianceApiFp(this.configuration).removeComplianceEndpointV1(id, signedEnvelope, options).then((request) => request(this.axios, this.basePath));
+    }
+}
+
 
 /**
  * TransactionsApi - axios parameter creator

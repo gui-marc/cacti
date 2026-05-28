@@ -132,6 +132,40 @@
             "type": "string"
           }
         }
+      },
+      "AddComplianceEndpointPayload": {
+        "type": "object",
+        "description": "Inner payload of a signed add-compliance-endpoint request.",
+        "required": ["partnerId", "url"],
+        "properties": {
+          "partnerId": {
+            "type": "string",
+            "description": "Identifier of the partner that owns this compliance endpoint. Must exist in the partners store."
+          },
+          "url": {
+            "type": "string",
+            "description": "HTTPS URL of the compliance provider endpoint."
+          }
+        }
+      },
+      "AddComplianceEndpointResponsePayload": {
+        "type": "object",
+        "description": "Inner payload of the signed add-compliance-endpoint response.",
+        "required": ["id", "partnerId", "url"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Server-generated UUID identifying the registered compliance endpoint."
+          },
+          "partnerId": {
+            "type": "string",
+            "description": "Identifier of the partner that owns this compliance endpoint."
+          },
+          "url": {
+            "type": "string",
+            "description": "HTTPS URL of the compliance provider endpoint."
+          }
+        }
       }
     }
   },
@@ -255,6 +289,120 @@
           },
           "404": {
             "description": "Transaction not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/plugins/@hyperledger-cacti/cacti-plugin-cbdc-controller/compliance-endpoint": {
+      "post": {
+        "operationId": "addComplianceEndpointV1",
+        "summary": "Register a compliance endpoint.",
+        "description": "Adds a new compliance provider endpoint to the controller's store. The server generates the endpoint's id. The request body must be a `SignedEnvelope` whose inner payload is an `AddComplianceEndpointPayload`. The 201 response body is a `SignedEnvelope` whose inner payload is an `AddComplianceEndpointResponsePayload`.",
+        "tags": ["compliance"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignedEnvelope"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Compliance endpoint registered successfully.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignedEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing required fields or non-HTTPS URL when HTTPS is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Envelope signature missing, malformed, or unverifiable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The specified partnerId does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/plugins/@hyperledger-cacti/cacti-plugin-cbdc-controller/compliance-endpoint/{id}": {
+      "delete": {
+        "operationId": "removeComplianceEndpointV1",
+        "summary": "Remove a compliance endpoint.",
+        "description": "Deletes a previously registered compliance provider endpoint by its id. The request body must be a `SignedEnvelope` with an empty payload (used only for authentication). Returns 204 No Content on success.",
+        "tags": ["compliance"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The server-generated UUID of the compliance endpoint to remove."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignedEnvelope"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Compliance endpoint removed successfully."
+          },
+          "401": {
+            "description": "Envelope signature missing, malformed, or unverifiable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Compliance endpoint not found.",
             "content": {
               "application/json": {
                 "schema": {

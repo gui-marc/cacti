@@ -8,6 +8,7 @@ import {
 import CBDCController from "../../../main/typescript/core/cbdc-controller";
 import { PartnerSecurityService } from "../../../main/typescript/core/partner-security-service";
 import { InMemoryPartnersStore } from "../../../main/typescript/store/partners-store";
+import { InMemoryComplianceEndpointsStore } from "../../../main/typescript/store/compliance-endpoints-store";
 
 const buildRes = () => {
   const res: Partial<Response> = {};
@@ -31,7 +32,10 @@ const buildEndpoint = () => {
     controller,
     infrastructure: { environments: {} } as IInfrastructure,
     partnerSecurityService: buildSecurityService(),
+    complianceEndpointsStore: new InMemoryComplianceEndpointsStore(),
+    partnersStore: new InMemoryPartnersStore(),
     requireClientAuth: false,
+    requireHttps: true,
     logLevel: "ERROR",
   };
   return {
@@ -110,7 +114,10 @@ describe("AcceptTransactionEndpointV1", () => {
       controller,
       infrastructure: { environments: {} } as IInfrastructure,
       partnerSecurityService: buildSecurityService(),
+      complianceEndpointsStore: new InMemoryComplianceEndpointsStore(),
+      partnersStore: new InMemoryPartnersStore(),
       requireClientAuth: false,
+      requireHttps: true,
       logLevel: "ERROR",
     });
     const req = {
@@ -134,7 +141,10 @@ describe("AcceptTransactionEndpointV1", () => {
       controller,
       infrastructure: { environments: {} } as IInfrastructure,
       partnerSecurityService: buildSecurityService(),
+      complianceEndpointsStore: new InMemoryComplianceEndpointsStore(),
+      partnersStore: new InMemoryPartnersStore(),
       requireClientAuth: false,
+      requireHttps: true,
       logLevel: "ERROR",
     });
     const req = {

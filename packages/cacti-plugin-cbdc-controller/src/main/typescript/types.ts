@@ -6,6 +6,8 @@ import {
 import { LogLevelDesc } from "@hyperledger/cactus-common";
 import CBDCController from "./core/cbdc-controller";
 import { PartnerSecurityService } from "./core/partner-security-service";
+import { ComplianceEndpointsStore } from "./store/compliance-endpoints-store";
+import { PartnersStore } from "./store/partners-store";
 
 export interface IInfrastructure {
   environments: Record<string, ILedgerEnvironment>;
@@ -23,7 +25,10 @@ export interface IRequestOptions {
   infrastructure: IInfrastructure;
   controller: CBDCController;
   partnerSecurityService: PartnerSecurityService;
+  complianceEndpointsStore: ComplianceEndpointsStore;
+  partnersStore: PartnersStore;
   requireClientAuth: boolean;
+  requireHttps: boolean;
   logLevel?: LogLevelDesc;
 }
 
@@ -47,6 +52,11 @@ export type InitiateTransactionResult =
 
 export interface IAcceptTransactionRequest {
   transactionId: string;
+}
+
+export interface IAddComplianceEndpointRequest {
+  partnerId: string;
+  url: string;
 }
 
 export enum ComplianceResult {

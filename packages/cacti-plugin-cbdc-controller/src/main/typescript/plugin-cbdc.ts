@@ -15,6 +15,8 @@ import { IInfrastructure, ILedgerEnvironment, IRequestOptions } from "./types";
 import { registerWebServiceEndpoint } from "@hyperledger/cactus-core";
 import { InitiateTransactionEndpointV1 } from "./web-services/initiate-transaction-endpoint";
 import { AcceptTransactionEndpointV1 } from "./web-services/accept-transaction-endpoint";
+import { AddComplianceEndpointEndpointV1 } from "./web-services/add-compliance-endpoint-endpoint";
+import { RemoveComplianceEndpointEndpointV1 } from "./web-services/remove-compliance-endpoint-endpoint";
 import CBDCController from "./core/cbdc-controller";
 import { TransactionStore } from "./store/transaction-store";
 import { PartnersStore } from "./store/partners-store";
@@ -117,7 +119,10 @@ export class PluginCBDCController implements ICactusPlugin {
       logLevel: this.logLevel,
       controller: this.controller,
       partnerSecurityService: this.partnerSecurityService,
+      complianceEndpointsStore: this.options.complianceEndpointsStore,
+      partnersStore: this.options.partnersStore,
       requireClientAuth: this.requireClientAuth,
+      requireHttps: this.options.requireHttps ?? true,
     };
 
     await Promise.all([
@@ -128,6 +133,14 @@ export class PluginCBDCController implements ICactusPlugin {
       registerWebServiceEndpoint(
         this.webApplication,
         new AcceptTransactionEndpointV1(requestOptions),
+      ),
+      registerWebServiceEndpoint(
+        this.webApplication,
+        new AddComplianceEndpointEndpointV1(requestOptions),
+      ),
+      registerWebServiceEndpoint(
+        this.webApplication,
+        new RemoveComplianceEndpointEndpointV1(requestOptions),
       ),
     ]);
   }

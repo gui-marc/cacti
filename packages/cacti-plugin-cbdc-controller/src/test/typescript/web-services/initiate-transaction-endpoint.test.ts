@@ -13,6 +13,7 @@ import {
   InMemoryPartnersStore,
   PartnersStore,
 } from "../../../main/typescript/store/partners-store";
+import { InMemoryComplianceEndpointsStore } from "../../../main/typescript/store/compliance-endpoints-store";
 
 const buildRequest = (
   overrides: Partial<IInitiateTransactionRequest> = {},
@@ -52,7 +53,10 @@ const buildEndpoint = (initiateResult: InitiateTransactionResult) => {
     controller,
     infrastructure,
     partnerSecurityService: buildSecurityService(),
+    complianceEndpointsStore: new InMemoryComplianceEndpointsStore(),
+    partnersStore: new InMemoryPartnersStore(),
     requireClientAuth: false,
+    requireHttps: true,
     logLevel: "ERROR",
   };
   return {
@@ -153,7 +157,10 @@ describe("InitiateTransactionEndpointV1", () => {
       controller,
       infrastructure: { environments: {} } as IInfrastructure,
       partnerSecurityService: buildSecurityService(),
+      complianceEndpointsStore: new InMemoryComplianceEndpointsStore(),
+      partnersStore: new InMemoryPartnersStore(),
       requireClientAuth: false,
+      requireHttps: true,
       logLevel: "ERROR",
     });
     const req = {

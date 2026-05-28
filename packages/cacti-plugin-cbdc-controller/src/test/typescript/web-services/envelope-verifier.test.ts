@@ -9,6 +9,7 @@ import {
 import CBDCController from "../../../main/typescript/core/cbdc-controller";
 import { PartnerSecurityService } from "../../../main/typescript/core/partner-security-service";
 import { InMemoryPartnersStore } from "../../../main/typescript/store/partners-store";
+import { InMemoryComplianceEndpointsStore } from "../../../main/typescript/store/compliance-endpoints-store";
 import {
   ISignedEnvelope,
   generatePartnerSecret,
@@ -53,7 +54,10 @@ describe("Endpoint envelope verification (requireClientAuth=true)", () => {
       controller: controller as CBDCController,
       infrastructure: { environments: {} } as IInfrastructure,
       partnerSecurityService: securityService,
+      complianceEndpointsStore: new InMemoryComplianceEndpointsStore(),
+      partnersStore: new InMemoryPartnersStore(),
       requireClientAuth: true,
+      requireHttps: true,
       logLevel: "ERROR",
     };
     return {
@@ -68,7 +72,10 @@ describe("Endpoint envelope verification (requireClientAuth=true)", () => {
       controller: controller as CBDCController,
       infrastructure: { environments: {} } as IInfrastructure,
       partnerSecurityService: securityService,
+      complianceEndpointsStore: new InMemoryComplianceEndpointsStore(),
+      partnersStore: new InMemoryPartnersStore(),
       requireClientAuth: true,
+      requireHttps: true,
       logLevel: "ERROR",
     };
     return {
