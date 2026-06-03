@@ -33,8 +33,6 @@ function chainCfg(chain: ChainCode): IChainRuntimeConfig {
   return {
     chainCode: chain,
     networkId: `${chain}-test`,
-    rpcHttpUrl: "http://unused",
-    rpcWsUrl: "ws://unused",
     cbdcContract: {
       contractName: "Stub",
       contractAddress: "0x0",

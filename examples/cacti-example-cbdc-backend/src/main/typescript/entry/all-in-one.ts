@@ -2,12 +2,14 @@
  * All-in-one orchestrator: brings up the full CBDC example stack from a
  * single Node process.
  *
- *   - Starts Besu + Geth ledger containers via test-tooling
- *   - Deploys SATPTokenContract + SATPWrapperContract on each chain
+ *   - Starts Besu + Geth ledger containers via the local
+ *     LocalBesuEnvironment / LocalEthereumEnvironment classes
+ *   - Deploys SATPTokenContract on each chain
  *   - Starts one SATP Hermes gateway
  *   - Starts one PluginCBDCController (acts as both central banks)
  *   - Starts partner-a and partner-b Express apps
- *   - Mints starting balances + grants BRIDGE_ROLE so partners can transact
+ *   - Provisions a fresh on-chain account per seed user, mints starting
+ *     balances, and grants BRIDGE_ROLE so partners can transact
  *
  * Run with:
  *   yarn all-in-one
@@ -15,10 +17,6 @@
  * Then point a frontend at http://localhost:5100 (partner-a) or
  * http://localhost:5200 (partner-b). Seeded credentials are printed at boot.
  */
-
-// Must be first: stubs `@jest/globals` so the plugin's test-env helpers
-// load outside Jest.
-import "./jest-globals-shim";
 
 import path from "node:path";
 import fs from "node:fs";
@@ -39,14 +37,8 @@ import {
   TransactRequestSourceAsset,
 } from "@hyperledger/cactus-plugin-satp-hermes";
 
-import {
-  BesuTestEnvironment,
-  SupportedContractTypes as BesuContractTypes,
-} from "@hyperledger-cacti/cacti-plugin-cbdc-controller/dist/lib/test/typescript/dummy-environment/besu-environment";
-import {
-  EthereumTestEnvironment,
-  SupportedContractTypes as EthContractTypes,
-} from "@hyperledger-cacti/cacti-plugin-cbdc-controller/dist/lib/test/typescript/dummy-environment/ethereum-environment";
+import { LocalBesuEnvironment } from "../infrastructure/besu-environment";
+import { LocalEthereumEnvironment } from "../infrastructure/ethereum-environment";
 
 import {
   applyCentralBankMigrations,
@@ -71,6 +63,14 @@ const PARTNER_A_PORT = 5100;
 const PARTNER_B_PORT = 5200;
 const FX_RATE = 1.5;
 
+const PER_USER_MINT = 10_000;
+
+interface SeedUserSpec {
+  taxId: string;
+  password: string;
+  displayName: string;
+}
+
 async function main() {
   // SATP knex repos use NODE_ENV / ENVIRONMENT to pick a config key; the
   // bundled knexfile only ships "default".
@@ -83,19 +83,19 @@ async function main() {
   console.log(`[all-in-one] runtime dir: ${runtimeDir}`);
 
   console.log("[all-in-one] starting Besu ledger...");
-  const besuEnv = await BesuTestEnvironment.setupTestEnvironment(
-    { logLevel: "INFO" },
-    [{ assetType: BesuContractTypes.FUNGIBLE, contractName: CONTRACT_NAME }],
-  );
-  await besuEnv.deployAndSetupContracts(ClaimFormat.BUNGEE);
+  const besuEnv = await LocalBesuEnvironment.start({
+    logLevel: "INFO",
+    contractName: CONTRACT_NAME,
+    claimFormat: ClaimFormat.BUNGEE,
+  });
   console.log("[all-in-one] Besu ready");
 
   console.log("[all-in-one] starting Ethereum (geth) ledger...");
-  const ethEnv = await EthereumTestEnvironment.setupTestEnvironment(
-    { logLevel: "INFO" },
-    [{ assetType: EthContractTypes.FUNGIBLE, contractName: CONTRACT_NAME }],
-  );
-  await ethEnv.deployAndSetupContracts(ClaimFormat.BUNGEE);
+  const ethEnv = await LocalEthereumEnvironment.start({
+    logLevel: "INFO",
+    contractName: CONTRACT_NAME,
+    claimFormat: ClaimFormat.BUNGEE,
+  });
   console.log("[all-in-one] Ethereum ready");
 
   // ----- CBDC controller + SATP gateway -----
@@ -106,13 +106,13 @@ async function main() {
   const besuCBDCEnv: ILedgerEnvironment = {
     getAsset(_id, amount): TransactRequestSourceAsset {
       return {
-        contractName: besuEnv.getTestFungibleContractName(),
-        contractAddress: besuEnv.getTestFungibleContractAddress(),
+        contractName: besuEnv.getContractName(),
+        contractAddress: besuEnv.getContractAddress(),
         ercTokenStandard: "ERC20",
         id: besuEnv.defaultAsset.id,
         networkId: besuEnv.network,
         tokenType: TokenType.Fungible,
-        owner: besuEnv.getTestOwnerAccount(),
+        owner: besuEnv.getOwnerAccount(),
         referenceId: besuEnv.defaultAsset.referenceId,
         amount: amount.toString(),
       } as TransactRequestSourceAsset;
@@ -126,13 +126,13 @@ async function main() {
   const ethCBDCEnv: ILedgerEnvironment = {
     getAsset(_id, amount): TransactRequestSourceAsset {
       return {
-        contractName: ethEnv.getTestFungibleContractName(),
-        contractAddress: ethEnv.getTestFungibleContractAddress(),
+        contractName: ethEnv.getContractName(),
+        contractAddress: ethEnv.getContractAddress(),
         ercTokenStandard: "ERC20",
         id: ethEnv.defaultAsset.id,
         networkId: ethEnv.network,
         tokenType: TokenType.Fungible,
-        owner: ethEnv.getTestOwnerAccount(),
+        owner: ethEnv.getOwnerAccount(),
         referenceId: ethEnv.defaultAsset.referenceId,
         amount: amount.toString(),
       } as TransactRequestSourceAsset;
@@ -189,22 +189,52 @@ async function main() {
   dispatcherTransact = (req) =>
     satpGateway.gateway.BLODispatcherInstance!.Transact(req);
 
-  // ----- mint + grant + approve so transfers can actually happen -----
+  // ----- per-user account provisioning + mint + grant + approve -----
 
-  const initialMint = 1_000_000;
-  await besuEnv.mintTokens(initialMint.toString(), TokenType.Fungible);
+  const seedUserSpecsA: SeedUserSpec[] = [
+    { taxId: "111", password: "demo", displayName: "Alice (Bank A)" },
+    { taxId: "222", password: "demo", displayName: "Bob (Bank A)" },
+  ];
+  const seedUserSpecsB: SeedUserSpec[] = [
+    { taxId: "333", password: "demo", displayName: "Carol (Bank B)" },
+  ];
+
+  // Spin up a dedicated wallet on each chain for every seed user.
+  const provisionSeedUsers = async (specs: SeedUserSpec[]) => {
+    const result = [];
+    for (const spec of specs) {
+      const besuAcc = await besuEnv.createAccount();
+      const ethAcc = await ethEnv.createAccount();
+      result.push({
+        ...spec,
+        ledgerAccounts: {
+          besu: besuAcc.address,
+          ethereum: ethAcc.address,
+        },
+      });
+    }
+    return result;
+  };
+
+  const seedUsersA = await provisionSeedUsers(seedUserSpecsA);
+  const seedUsersB = await provisionSeedUsers(seedUserSpecsB);
+
+  // Mint per-user starting balance on Besu (the origin chain).
+  const allUsers = [...seedUsersA, ...seedUsersB];
+  for (const user of allUsers) {
+    await besuEnv.mint(PER_USER_MINT, user.ledgerAccounts.besu);
+  }
+  const totalMinted = PER_USER_MINT * allUsers.length;
+
+  // Grant BRIDGE_ROLE + approve total minted amount against the SATP wrapper.
   const besuWrapper = (
     await satpGateway.gateway.BLODispatcherInstance!.GetApproveAddress({
       networkId: besuEnv.network,
       tokenType: TokenType.Fungible,
     })
   ).approveAddress;
-  await besuEnv.giveRoleToBridge(besuWrapper);
-  await besuEnv.approveAssets(
-    besuWrapper,
-    initialMint.toString(),
-    TokenType.Fungible,
-  );
+  await besuEnv.grantBridgeRole(besuWrapper);
+  await besuEnv.approve(besuWrapper, totalMinted);
 
   const ethWrapper = (
     await satpGateway.gateway.BLODispatcherInstance!.GetApproveAddress({
@@ -212,7 +242,7 @@ async function main() {
       tokenType: TokenType.Fungible,
     })
   ).approveAddress;
-  await ethEnv.giveRoleToBridge(ethWrapper);
+  await ethEnv.grantBridgeRole(ethWrapper);
 
   // ----- mount CBDC plugin on an Express server -----
 
@@ -234,12 +264,10 @@ async function main() {
     besu: {
       chainCode: "besu",
       networkId: besuEnv.network.id,
-      rpcHttpUrl: "n/a",
-      rpcWsUrl: "n/a",
       cbdcContract: {
-        contractName: besuEnv.getTestFungibleContractName(),
-        contractAddress: besuEnv.getTestFungibleContractAddress(),
-        ownerAddress: besuEnv.getTestOwnerAccount(),
+        contractName: besuEnv.getContractName(),
+        contractAddress: besuEnv.getContractAddress(),
+        ownerAddress: besuEnv.getOwnerAccount(),
         ownerPrivateKey: "",
       },
       satpWrapperAddress: besuWrapper,
@@ -247,49 +275,15 @@ async function main() {
     ethereum: {
       chainCode: "ethereum",
       networkId: ethEnv.network.id,
-      rpcHttpUrl: "n/a",
-      rpcWsUrl: "n/a",
       cbdcContract: {
-        contractName: ethEnv.getTestFungibleContractName(),
-        contractAddress: ethEnv.getTestFungibleContractAddress(),
-        ownerAddress: ethEnv.getTestOwnerAccount(),
+        contractName: ethEnv.getContractName(),
+        contractAddress: ethEnv.getContractAddress(),
+        ownerAddress: ethEnv.getOwnerAccount(),
         ownerPrivateKey: "",
       },
       satpWrapperAddress: ethWrapper,
     },
   };
-
-  const seedUsersA = [
-    {
-      taxId: "111",
-      password: "demo",
-      displayName: "Alice (Bank A)",
-      ledgerAccounts: {
-        besu: besuEnv.getTestOwnerAccount(),
-        ethereum: ethEnv.getTestOwnerAccount(),
-      },
-    },
-    {
-      taxId: "222",
-      password: "demo",
-      displayName: "Bob (Bank A)",
-      ledgerAccounts: {
-        besu: besuEnv.getTestOwnerAccount(),
-        ethereum: ethEnv.getTestOwnerAccount(),
-      },
-    },
-  ];
-  const seedUsersB = [
-    {
-      taxId: "333",
-      password: "demo",
-      displayName: "Carol (Bank B)",
-      ledgerAccounts: {
-        besu: besuEnv.getTestOwnerAccount(),
-        ethereum: ethEnv.getTestOwnerAccount(),
-      },
-    },
-  ];
 
   const partnerACfg: IPartnerConfig = {
     role: "partner",
@@ -327,15 +321,15 @@ async function main() {
   const partnerA = await startPartner({
     config: partnerACfg,
     balanceReaders: {
-      besu: { read: async () => "0" },
-      ethereum: { read: async () => "0" },
+      besu: { read: async (account) => besuEnv.getBalance(account) },
+      ethereum: { read: async (account) => ethEnv.getBalance(account) },
     },
   });
   const partnerB = await startPartner({
     config: partnerBCfg,
     balanceReaders: {
-      besu: { read: async () => "0" },
-      ethereum: { read: async () => "0" },
+      besu: { read: async (account) => besuEnv.getBalance(account) },
+      ethereum: { read: async (account) => ethEnv.getBalance(account) },
     },
   });
 
@@ -347,10 +341,16 @@ async function main() {
   console.log(`  Partner B:     http://localhost:${PARTNER_B_PORT}`);
   console.log(`  SATP gateway:  http://localhost:3010`);
   console.log(`\nSeeded users (password "demo"):`);
-  console.log(`  partner-a: taxId=111 (Alice), taxId=222 (Bob)`);
-  console.log(`  partner-b: taxId=333 (Carol)`);
+  for (const u of seedUsersA) {
+    console.log(`  partner-a: taxId=${u.taxId} (${u.displayName})`);
+    console.log(`    besu=${u.ledgerAccounts.besu} eth=${u.ledgerAccounts.ethereum}`);
+  }
+  for (const u of seedUsersB) {
+    console.log(`  partner-b: taxId=${u.taxId} (${u.displayName})`);
+    console.log(`    besu=${u.ledgerAccounts.besu} eth=${u.ledgerAccounts.ethereum}`);
+  }
   console.log(`\nFX rate: 1 BESU = ${FX_RATE} ETH`);
-  console.log(`Initial supply: ${initialMint} CBDC minted on Besu`);
+  console.log(`Initial supply: ${PER_USER_MINT} CBDC minted per user on Besu`);
   console.log("\nPress Ctrl-C to shut down.\n");
 
   exitHook((done: any) => {

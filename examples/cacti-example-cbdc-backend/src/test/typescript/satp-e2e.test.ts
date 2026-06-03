@@ -58,6 +58,7 @@ const CONTRACT_NAME = "SATPContract";
 beforeAll(async () => {
   // Knex SATP repositories pick their config by NODE_ENV / ENVIRONMENT.
   // knexLocalInstance only exposes a "default" key.
+  if (!process.env.NODE_ENVIRONMENT) process.env.NODE_ENVIRONMENT = "default";
   if (!process.env.NODE_ENV) process.env.NODE_ENV = "default";
   if (!process.env.ENVIRONMENT) process.env.ENVIRONMENT = "default";
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "cbdc-satp-e2e-"));

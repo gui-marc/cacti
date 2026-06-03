@@ -15,3 +15,10 @@ export {
   readEthereumBalance,
 } from "./infrastructure/ethereum-environment";
 export { startSatpGateway } from "./infrastructure/satp-gateway";
+
+export {
+  AuthApiFactory,
+  TransactionsApiFactory,
+  CustomerApiFactory,
+  ComplianceApiFactory,
+} from "./generated/openapi/typescript-axios";
