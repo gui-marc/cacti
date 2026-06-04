@@ -52,11 +52,12 @@ export class RemoveComplianceEndpointEndpointV1 implements IWebServiceEndpoint {
   }
 
   getAuthorizationOptionsProvider(): IAsyncProvider<IEndpointAuthzOptions> {
+    const requireClientAuth = this.options.requireClientAuth;
     return {
       async get() {
         return {
-          isProtected: true,
-          requiredRoles: ["admin"],
+          isProtected: !requireClientAuth,
+          requiredRoles: [],
         };
       },
     };

@@ -1,10 +1,9 @@
-import type { User } from "@/api/types"
 import { createContext } from "react"
+import type { MeResponse } from "../../../cacti-example-cbdc-backend/src/main/typescript/generated/openapi/typescript-axios"
 
 interface AuthContext {
-  currentUser: User | null
-  login: () => Promise<void>
-  logout: () => Promise<void>
+  currentUser: MeResponse | undefined
+  isPending: boolean
 }
 
 export const authContext = createContext<AuthContext | undefined>(undefined)

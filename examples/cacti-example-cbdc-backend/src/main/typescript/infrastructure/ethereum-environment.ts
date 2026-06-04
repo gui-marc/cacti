@@ -142,7 +142,10 @@ export interface EthereumLedgerAccount {
 }
 
 const DEFAULT_ASSET_ID = "EthereumLocalEnvAsset";
-const NETWORK_ID = "EthereumLedgerExampleNetwork";
+// Must match a key the SATP gateway's (mock) PriceManager recognizes, since it
+// converts transfer amounts to USD by networkId — otherwise it throws
+// PriceNotFoundError. See packages/cactus-plugin-satp-hermes price-manager.ts.
+const NETWORK_ID = "EthereumLedgerTestNetwork";
 const DEFAULT_PASSPHRASE = "test";
 
 export class LocalEthereumEnvironment {
@@ -303,7 +306,16 @@ export class LocalEthereumEnvironment {
     if (!res.success) throw new Error(`grantBridgeRole failed for ${wrapperAddress}`);
   }
 
-  public async approve(spender: string, amount: string | number): Promise<void> {
+  /**
+   * Approve `spender` to pull `amount` tokens. By default the unlocked whale
+   * account signs; pass `signer` to approve from a per-user personal account
+   * (identified by its address + passphrase) that holds the funds.
+   */
+  public async approve(
+    spender: string,
+    amount: string | number,
+    signer?: { ethAccount: string; passphrase: string },
+  ): Promise<void> {
     const res = await this.connector.invokeContract({
       contract: {
         contractName: this.contractName,
@@ -313,8 +325,8 @@ export class LocalEthereumEnvironment {
       methodName: "approve",
       params: [spender, Number(amount)],
       web3SigningCredential: {
-        ethAccount: WHALE_ACCOUNT_ADDRESS,
-        secret: "",
+        ethAccount: signer?.ethAccount ?? WHALE_ACCOUNT_ADDRESS,
+        secret: signer?.passphrase ?? "",
         type: Web3SigningCredentialType.GethKeychainPassword,
       },
     });

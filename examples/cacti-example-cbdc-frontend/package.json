@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:partner-a": "VITE_BACKEND_URL=http://localhost:5100 VITE_APP_NAME=\"Bank A\" vite --port 5174",
+    "dev:partner-b": "VITE_BACKEND_URL=http://localhost:5200 VITE_APP_NAME=\"Bank B\" vite --port 5175",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "format": "prettier --write \"**/*.{ts,tsx}\"",
@@ -12,24 +14,27 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@base-ui/react": "^1.4.1",
+    "@base-ui/react": "^1.5.0",
     "@fontsource-variable/geist": "^5.2.8",
+    "@fontsource-variable/inter": "^5.2.8",
     "@hookform/resolvers": "^5.2.2",
+    "@hyperledger-cacti/cacti-example-cbdc-backend": "workspace:^",
     "@tailwindcss/vite": "^4.2.1",
     "@tanstack/react-query": "^5.100.10",
     "axios": "^1.16.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "lucide-react": "^1.14.0",
+    "lucide-react": "^1.17.0",
+    "next-themes": "^0.4.6",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "react-hook-form": "^7.75.0",
+    "react-hook-form": "^7.76.0",
     "react-router": "^7.15.0",
-    "shadcn": "^4.7.0",
+    "shadcn": "^4.10.0",
+    "sonner": "^2.0.7",
     "tailwind-merge": "^3.6.0",
     "tailwindcss": "^4.2.1",
-    "tw-animate-css": "^1.4.0",
-    "zod": "^4.4.3"
+    "tw-animate-css": "^1.4.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",

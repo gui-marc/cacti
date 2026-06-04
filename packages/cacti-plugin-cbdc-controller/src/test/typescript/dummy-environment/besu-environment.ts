@@ -795,4 +795,26 @@ export class BesuTestEnvironment {
     await this.ledger.stop();
     await this.ledger.destroy();
   }
+
+   public async getBalance(
+    contract_name: string,
+    contract_address: string,
+    contract_abi: any,
+    account: string,
+    signingCredential: Web3SigningCredential,
+  ): Promise<string> {
+    const responseBalanceBridge = await this.connector.invokeContract({
+      contractName: contract_name,
+      contractAddress: contract_address,
+      contractAbi: contract_abi,
+      invocationType: BesuContractInvocationType.Call,
+      methodName: "balanceOf",
+      params: [account],
+      signingCredential: signingCredential,
+      gas: Number(this.besuConfig.gasConfig?.gasLimit),
+    });
+
+    return responseBalanceBridge.callOutput;
+  }
+
 }

@@ -721,4 +721,29 @@ export class EthereumTestEnvironment {
       web3SigningCredential: this.getTestOracleSigningCredential(),
     });
   }
+
+    public async getBalance(
+    contract_name: string,
+    contract_address: string,
+    contract_abi: any,
+    account: string,
+    signingCredential: Web3SigningCredential,
+  ): Promise<string> {
+    const responseBalanceBridge = await this.connector.invokeContract({
+      contract: {
+        contractJSON: {
+          contractName: contract_name,
+          abi: contract_abi,
+          bytecode: contract_abi.object,
+        },
+        contractAddress: contract_address,
+      },
+      invocationType: EthContractInvocationType.Call,
+      methodName: "balanceOf",
+      params: [account],
+      web3SigningCredential: signingCredential,
+    });
+    
+    return responseBalanceBridge.callOutput;
+  }
 }

@@ -47,6 +47,10 @@
     ".": {
       "types": "./dist/lib/main/typescript/index.d.ts",
       "default": "./dist/lib/main/typescript/index.js"
+    },
+    "./dist/lib/test/typescript/dummy-environment/*": {
+      "types": "./dist/lib/test/typescript/dummy-environment/*.d.ts",
+      "default": "./dist/lib/test/typescript/dummy-environment/*.js"
     }
   },
   "files": [

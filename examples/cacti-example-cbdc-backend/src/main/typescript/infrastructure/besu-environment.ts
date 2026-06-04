@@ -150,7 +150,10 @@ export interface LedgerAccount {
 
 const BESU_GAS_LIMIT = "999999999999999";
 const DEFAULT_ASSET_ID = "BesuLocalEnvAsset";
-const NETWORK_ID = "BesuLedgerExampleNetwork";
+// Must match a key the SATP gateway's (mock) PriceManager recognizes, since it
+// converts transfer amounts to USD by networkId — otherwise it throws
+// PriceNotFoundError. See packages/cactus-plugin-satp-hermes price-manager.ts.
+const NETWORK_ID = "BesuLedgerTestNetwork";
 
 export class LocalBesuEnvironment {
   public readonly network: NetworkId = {
@@ -322,7 +325,16 @@ export class LocalBesuEnvironment {
     if (!res.success) throw new Error(`grantBridgeRole failed for ${wrapperAddress}`);
   }
 
-  public async approve(spender: string, amount: string | number): Promise<void> {
+  /**
+   * Approve `spender` to pull `amount` tokens. By default the genesis owner
+   * signs; pass `signer` to approve from another wallet (e.g. a per-user
+   * account that holds the funds being transferred).
+   */
+  public async approve(
+    spender: string,
+    amount: string | number,
+    signer?: { ethAccount: string; secret: string },
+  ): Promise<void> {
     const res = await this.connector.invokeContract({
       contractName: this.contractName,
       keychainId: this.keychain.getKeychainId(),
@@ -330,8 +342,8 @@ export class LocalBesuEnvironment {
       methodName: "approve",
       params: [spender, Number(amount)],
       signingCredential: {
-        ethAccount: this.ownerAccount,
-        secret: this.ownerPrivateKey,
+        ethAccount: signer?.ethAccount ?? this.ownerAccount,
+        secret: signer?.secret ?? this.ownerPrivateKey,
         type: Web3SigningCredentialType.PrivateKeyHex,
       },
       gas: Number(BESU_GAS_LIMIT),

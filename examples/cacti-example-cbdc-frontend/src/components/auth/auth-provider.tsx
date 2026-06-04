@@ -1,31 +1,25 @@
-import type { User } from "@/api/types"
+import { customerApi } from "@/api/endpoints"
 import { authContext } from "@/contexts/auth-context"
-import { sleep } from "@/lib/utils"
-import { useState } from "react"
+import { useQuery } from "@tanstack/react-query"
 
 interface AuthProviderProps {
   children: React.ReactNode
 }
 
 export default function AuthProvider({ children }: AuthProviderProps) {
-  const [currentUser, setCurrentUser] = useState<User | null>(null)
-
-  async function login() {
-    await sleep(200)
-    setCurrentUser({ id: "1", name: "John Doe" })
-  }
-
-  async function logout() {
-    await sleep(200)
-    setCurrentUser(null)
-  }
+  const { data: currentUser, isPending } = useQuery({
+    queryKey: ["currentUser"],
+    queryFn: async () => {
+      const response = await customerApi.getMe()
+      return response.data
+    },
+  })
 
   return (
     <authContext.Provider
       value={{
         currentUser,
-        login,
-        logout,
+        isPending,
       }}
     >
       {children}

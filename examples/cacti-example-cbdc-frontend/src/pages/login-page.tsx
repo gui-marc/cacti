@@ -1,3 +1,4 @@
+import { authApi } from "@/api/endpoints"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -8,50 +9,69 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { z } from "zod"
 import { FieldGroup } from "@/components/ui/field"
+import { Input } from "@/components/ui/input"
+import { queryClient } from "@/lib/query-client"
+
 import { useForm } from "react-hook-form"
-import { zodResolver } from "@hookform/resolvers/zod"
-
-const loginFormSchema = z.object({
-  taxId: z.string().min(1, "Tax ID is required"),
-  password: z.string().min(1, "Password is required"),
-})
-
-type LoginFormValues = z.infer<typeof loginFormSchema>
+import { useNavigate } from "react-router"
+import { toast } from "sonner"
 
 export default function LoginPage() {
-  const { handleSubmit } = useForm<LoginFormValues>({
+  const navigate = useNavigate()
+
+  const { handleSubmit, register } = useForm({
     defaultValues: {
       taxId: "",
       password: "",
     },
-    resolver: zodResolver(loginFormSchema),
   })
 
-  function onSubmit(data: LoginFormValues) {
-    console.log(data)
+  async function onSubmit(data: { taxId: string; password: string }) {
+    const response = await authApi.login({
+      password: data.password,
+      taxId: data.taxId,
+    })
+
+    if (response.status === 200) {
+      await queryClient.invalidateQueries({
+        queryKey: ["currentUser"],
+      })
+
+      toast.success(`Welcome back, ${response.data.displayName}!`)
+
+      await navigate("/")
+    }
   }
 
   return (
-    <div className="grid h-svh place-items-center bg-accent">
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle>Login to your account</CardTitle>
-          <CardDescription>
-            Enter your information below to access your account.
-          </CardDescription>
-          <CardAction>
-            <Button variant="link">Register</Button>
-          </CardAction>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit(onSubmit)}>
-            <FieldGroup></FieldGroup>
-          </form>
-        </CardContent>
-        <CardFooter></CardFooter>
-      </Card>
-    </div>
+    <form onSubmit={handleSubmit(onSubmit)}>
+      <div className="grid h-svh place-items-center bg-accent">
+        <Card className="w-full max-w-sm">
+          <CardHeader>
+            <CardTitle>Login to your account</CardTitle>
+            <CardDescription>
+              Enter your information below to access your account.
+            </CardDescription>
+            <CardAction>
+              <Button variant="link">Register</Button>
+            </CardAction>
+          </CardHeader>
+          <CardContent>
+            <FieldGroup>
+              <Input {...register("taxId")} placeholder="Tax ID" />
+              <Input
+                {...register("password")}
+                placeholder="Password"
+                type="password"
+              />
+            </FieldGroup>
+          </CardContent>
+          <CardFooter>
+            <Button type="submit">Login</Button>
+          </CardFooter>
+        </Card>
+      </div>
+    </form>
   )
 }

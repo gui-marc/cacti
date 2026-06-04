@@ -102,9 +102,19 @@ async function main() {
 
   let dispatcherTransact: ((req: TransactRequest) => Promise<unknown>) | null =
     null;
+  // Per-transaction allowance helpers, wired once the SATP wrapper addresses
+  // are known (see the GetApproveAddress calls below). Each one makes the asset
+  // `owner` wallet approve the SATP wrapper for exactly the amount it is about
+  // to lock, signing with that wallet's own credentials.
+  let approveBesuAsset:
+    | ((owner: string, amount: string | number) => Promise<void>)
+    | null = null;
+  let approveEthAsset:
+    | ((owner: string, amount: string | number) => Promise<void>)
+    | null = null;
 
   const besuCBDCEnv: ILedgerEnvironment = {
-    getAsset(_id, amount): TransactRequestSourceAsset {
+    getAsset(account, amount): TransactRequestSourceAsset {
       return {
         contractName: besuEnv.getContractName(),
         contractAddress: besuEnv.getContractAddress(),
@@ -112,19 +122,31 @@ async function main() {
         id: besuEnv.defaultAsset.id,
         networkId: besuEnv.network,
         tokenType: TokenType.Fungible,
-        owner: besuEnv.getOwnerAccount(),
+        // The asset is owned by the wallet the controller is transferring for
+        // (the sender on the source chain / the receiver on the destination
+        // chain), not the genesis account.
+        owner: account,
         referenceId: besuEnv.defaultAsset.referenceId,
         amount: amount.toString(),
       } as TransactRequestSourceAsset;
     },
     async transact(request) {
-      if (!dispatcherTransact) throw new Error("Gateway not ready");
+      if (!dispatcherTransact || !approveBesuAsset)
+        throw new Error("Gateway not ready");
+      if (request.sourceAsset.amount === undefined)
+        throw new Error("Source asset amount missing");
+      // Have the sender wallet approve the SATP wrapper to pull exactly this
+      // transfer's amount before routing it through the gateway.
+      await approveBesuAsset(
+        request.sourceAsset.owner,
+        request.sourceAsset.amount,
+      );
       return (await dispatcherTransact(request)) as never;
     },
   };
 
   const ethCBDCEnv: ILedgerEnvironment = {
-    getAsset(_id, amount): TransactRequestSourceAsset {
+    getAsset(account, amount): TransactRequestSourceAsset {
       return {
         contractName: ethEnv.getContractName(),
         contractAddress: ethEnv.getContractAddress(),
@@ -132,13 +154,25 @@ async function main() {
         id: ethEnv.defaultAsset.id,
         networkId: ethEnv.network,
         tokenType: TokenType.Fungible,
-        owner: ethEnv.getOwnerAccount(),
+        // The asset is owned by the wallet the controller is transferring for
+        // (the sender on the source chain / the receiver on the destination
+        // chain), not the whale account.
+        owner: account,
         referenceId: ethEnv.defaultAsset.referenceId,
         amount: amount.toString(),
       } as TransactRequestSourceAsset;
     },
     async transact(request) {
-      if (!dispatcherTransact) throw new Error("Gateway not ready");
+      if (!dispatcherTransact || !approveEthAsset)
+        throw new Error("Gateway not ready");
+      if (request.sourceAsset.amount === undefined)
+        throw new Error("Source asset amount missing");
+      // Have the sender wallet approve the SATP wrapper to pull exactly this
+      // transfer's amount before routing it through the gateway.
+      await approveEthAsset(
+        request.sourceAsset.owner,
+        request.sourceAsset.amount,
+      );
       return (await dispatcherTransact(request)) as never;
     },
   };
@@ -192,12 +226,17 @@ async function main() {
   // ----- per-user account provisioning + mint + grant + approve -----
 
   const seedUserSpecsA: SeedUserSpec[] = [
-    { taxId: "111", password: "demo", displayName: "Alice (Bank A)" },
-    { taxId: "222", password: "demo", displayName: "Bob (Bank A)" },
+    { taxId: "111", password: "demo", displayName: "Alice" },
+    { taxId: "222", password: "demo", displayName: "Bob" },
   ];
   const seedUserSpecsB: SeedUserSpec[] = [
-    { taxId: "333", password: "demo", displayName: "Carol (Bank B)" },
+    { taxId: "333", password: "demo", displayName: "Carol" },
   ];
+
+  // Signing credentials for the per-user wallets, keyed by lower-cased address.
+  // The transact hooks use these to make the sender approve the SATP wrapper.
+  const besuSigners = new Map<string, string>(); // address -> privateKey
+  const ethSigners = new Map<string, string>(); // address -> passphrase
 
   // Spin up a dedicated wallet on each chain for every seed user.
   const provisionSeedUsers = async (specs: SeedUserSpec[]) => {
@@ -205,6 +244,8 @@ async function main() {
     for (const spec of specs) {
       const besuAcc = await besuEnv.createAccount();
       const ethAcc = await ethEnv.createAccount();
+      besuSigners.set(besuAcc.address.toLowerCase(), besuAcc.privateKey);
+      ethSigners.set(ethAcc.address.toLowerCase(), ethAcc.passphrase);
       result.push({
         ...spec,
         ledgerAccounts: {
@@ -224,9 +265,11 @@ async function main() {
   for (const user of allUsers) {
     await besuEnv.mint(PER_USER_MINT, user.ledgerAccounts.besu);
   }
-  const totalMinted = PER_USER_MINT * allUsers.length;
 
-  // Grant BRIDGE_ROLE + approve total minted amount against the SATP wrapper.
+  // Grant BRIDGE_ROLE so each SATP wrapper can move funds. The allowance is
+  // set per-transaction inside the ILedgerEnvironment.transact hooks above, so
+  // the wrapper only ever holds an allowance for the amount it is about to
+  // pull.
   const besuWrapper = (
     await satpGateway.gateway.BLODispatcherInstance!.GetApproveAddress({
       networkId: besuEnv.network,
@@ -234,7 +277,11 @@ async function main() {
     })
   ).approveAddress;
   await besuEnv.grantBridgeRole(besuWrapper);
-  await besuEnv.approve(besuWrapper, totalMinted);
+  approveBesuAsset = (owner, amount) => {
+    const secret = besuSigners.get(owner.toLowerCase());
+    if (!secret) throw new Error(`No Besu signing key for wallet ${owner}`);
+    return besuEnv.approve(besuWrapper, amount, { ethAccount: owner, secret });
+  };
 
   const ethWrapper = (
     await satpGateway.gateway.BLODispatcherInstance!.GetApproveAddress({
@@ -243,6 +290,15 @@ async function main() {
     })
   ).approveAddress;
   await ethEnv.grantBridgeRole(ethWrapper);
+  approveEthAsset = (owner, amount) => {
+    const passphrase = ethSigners.get(owner.toLowerCase());
+    if (!passphrase)
+      throw new Error(`No Ethereum signing key for wallet ${owner}`);
+    return ethEnv.approve(ethWrapper, amount, {
+      ethAccount: owner,
+      passphrase,
+    });
+  };
 
   // ----- mount CBDC plugin on an Express server -----
 
@@ -264,6 +320,8 @@ async function main() {
     besu: {
       chainCode: "besu",
       networkId: besuEnv.network.id,
+      rpcHttpUrl: "",
+      rpcWsUrl: "",
       cbdcContract: {
         contractName: besuEnv.getContractName(),
         contractAddress: besuEnv.getContractAddress(),
@@ -275,6 +333,8 @@ async function main() {
     ethereum: {
       chainCode: "ethereum",
       networkId: ethEnv.network.id,
+      rpcHttpUrl: "",
+      rpcWsUrl: "",
       cbdcContract: {
         contractName: ethEnv.getContractName(),
         contractAddress: ethEnv.getContractAddress(),
