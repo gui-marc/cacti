@@ -21,10 +21,10 @@ import {
 } from "./ui/select"
 import { Separator } from "./ui/separator"
 import { useEthereumBalance } from "@/hooks/use-ethereum-balance"
-import { useState } from "react"
 import { useForm } from "react-hook-form"
 import useTransferMoney from "@/hooks/use-transfer-money"
 import { Spinner } from "./ui/spinner"
+import { useState } from "react"
 
 type AccountType = "besu" | "ethereum"
 
@@ -42,6 +42,7 @@ export default function CreateTransactionDialog({
 }) {
   const { mutateAsync, isPending } = useTransferMoney()
 
+  const [senderChain, setSenderChain] = useState<AccountType>("besu")
   const { register, handleSubmit } = useForm<FormValues>({
     defaultValues: {
       senderChain: "besu",
@@ -51,18 +52,17 @@ export default function CreateTransactionDialog({
     },
   })
 
-  const [accountType, setAccountType] = useState<AccountType>("besu")
   const { data: besuBalance } = useBesuBalance()
   const { data: ethereumBalance } = useEthereumBalance()
 
-  const currentAccount = accountType === "besu" ? besuBalance : ethereumBalance
+  const currentAccount = senderChain === "besu" ? besuBalance : ethereumBalance
 
   async function onSubmit(data: FormValues) {
     await mutateAsync({
       amount: data.amount,
       receiverAddress: data.receiverAddress,
       destinationChain: data.receiverChain,
-      sourceChain: data.senderChain,
+      sourceChain: senderChain,
     })
   }
 
@@ -84,8 +84,8 @@ export default function CreateTransactionDialog({
             <Label htmlFor="name-1">Account from</Label>
             <Select
               disabled={isPending}
-              defaultValue="besu"
-              onValueChange={(value) => setAccountType(value as AccountType)}
+              defaultValue={senderChain}
+              onValueChange={(value) => setSenderChain(value as AccountType)}
               {...register("senderChain")}
             >
               <SelectTrigger>

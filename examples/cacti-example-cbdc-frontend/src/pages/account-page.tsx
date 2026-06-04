@@ -13,17 +13,23 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty"
-import { HandCoinsIcon, BanknoteArrowDown, BanknoteArrowUp, ArrowRightLeftIcon } from "lucide-react"
+import {
+  HandCoinsIcon,
+  BanknoteArrowDown,
+  BanknoteArrowUp,
+  ArrowRightLeftIcon,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table"
 import CreateTransactionDialog from "@/components/create-transaction-dialog"
 import { DialogTrigger } from "@/components/ui/dialog"
+import ChainBadge from "@/components/chain-badge"
+import Navbar from "@/components/navbar"
 
 type AccountType = "besu" | "ethereum"
 
 export default function AccountPage() {
   const [accountType, setAccountType] = useState<AccountType>("besu")
-  const { currentUser } = useAuth()
 
   const { data: besuBalance } = useBesuBalance()
   const { data: ethereumBalance } = useEthereumBalance()
@@ -33,7 +39,7 @@ export default function AccountPage() {
 
   return (
     <Protected>
-      <header className=""></header>
+      <Navbar />
       <div className="bg-accent">
         <div className="container mx-auto py-10">
           <Tabs className="mb-6">
@@ -60,7 +66,13 @@ export default function AccountPage() {
             </div>
 
             <CreateTransactionDialog>
-              <DialogTrigger render={<Button size="sm">Transfer <ArrowRightLeftIcon /></Button>}/>
+              <DialogTrigger
+                render={
+                  <Button size="sm">
+                    Transfer <ArrowRightLeftIcon />
+                  </Button>
+                }
+              />
             </CreateTransactionDialog>
           </div>
         </div>
@@ -98,21 +110,23 @@ export default function AccountPage() {
                       <p className="text-sm text-muted-foreground">Status</p>
                     </TableCell>
                     <TableCell>
-                      <p className="font-medium">{transaction.sourceChain}</p>
-                      <p className="text-sm text-muted-foreground">
-                        Source Chain
+                      <p className="font-medium">
+                        <ChainBadge chain={transaction.sourceChain} />
                       </p>
+                      <p className="text-sm text-muted-foreground">Source</p>
                     </TableCell>
                     <TableCell>
                       <p className="font-medium">
-                        {transaction.destinationChain}
+                        <ChainBadge chain={transaction.destinationChain} />{" "}
+                        {transaction.receiverAddress.slice(0, 6)}...
                       </p>
                       <p className="text-sm text-muted-foreground">
-                        Destination Chain
+                        Destination
                       </p>
                     </TableCell>
                     <TableCell>
                       <p className="font-mono font-medium">
+                        {isReceived ? "+" : "-"}
                         {transaction.amount.toFixed(2)}
                       </p>
                       <p className="text-sm text-muted-foreground">Amount</p>
