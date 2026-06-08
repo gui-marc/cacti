@@ -166,6 +166,48 @@
             "description": "HTTPS URL of the compliance provider endpoint."
           }
         }
+      },
+      "InitiateTransactionRequest": {
+        "description": "Body of an initiate-transaction request. A `SignedEnvelope` when the controller requires client authentication, or a bare `InitiateTransactionPayload` when it does not.",
+        "oneOf": [
+          { "$ref": "#/components/schemas/SignedEnvelope" },
+          { "$ref": "#/components/schemas/InitiateTransactionPayload" }
+        ]
+      },
+      "InitiateTransactionResponse": {
+        "description": "Body of an initiate-transaction response. A `SignedEnvelope` when the controller requires client authentication, or a bare `InitiateTransactionResponsePayload` when it does not.",
+        "oneOf": [
+          { "$ref": "#/components/schemas/SignedEnvelope" },
+          { "$ref": "#/components/schemas/InitiateTransactionResponsePayload" }
+        ]
+      },
+      "AcceptTransactionRequest": {
+        "description": "Body of an accept-transaction request. A `SignedEnvelope` when the controller requires client authentication, or a bare `AcceptTransactionPayload` when it does not.",
+        "oneOf": [
+          { "$ref": "#/components/schemas/SignedEnvelope" },
+          { "$ref": "#/components/schemas/AcceptTransactionPayload" }
+        ]
+      },
+      "AcceptTransactionResponse": {
+        "description": "Body of an accept-transaction response. A `SignedEnvelope` when the controller requires client authentication, or a bare `AcceptTransactionResponsePayload` when it does not.",
+        "oneOf": [
+          { "$ref": "#/components/schemas/SignedEnvelope" },
+          { "$ref": "#/components/schemas/AcceptTransactionResponsePayload" }
+        ]
+      },
+      "AddComplianceEndpointRequest": {
+        "description": "Body of an add-compliance-endpoint request. A `SignedEnvelope` when the controller requires client authentication, or a bare `AddComplianceEndpointPayload` when it does not.",
+        "oneOf": [
+          { "$ref": "#/components/schemas/SignedEnvelope" },
+          { "$ref": "#/components/schemas/AddComplianceEndpointPayload" }
+        ]
+      },
+      "AddComplianceEndpointResponse": {
+        "description": "Body of an add-compliance-endpoint response. A `SignedEnvelope` when the controller requires client authentication, or a bare `AddComplianceEndpointResponsePayload` when it does not.",
+        "oneOf": [
+          { "$ref": "#/components/schemas/SignedEnvelope" },
+          { "$ref": "#/components/schemas/AddComplianceEndpointResponsePayload" }
+        ]
       }
     }
   },
@@ -181,7 +223,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SignedEnvelope"
+                "$ref": "#/components/schemas/InitiateTransactionRequest"
               }
             }
           }
@@ -192,7 +234,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SignedEnvelope"
+                  "$ref": "#/components/schemas/InitiateTransactionResponse"
                 }
               }
             }
@@ -202,7 +244,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SignedEnvelope"
+                  "$ref": "#/components/schemas/InitiateTransactionResponse"
                 }
               }
             }
@@ -241,7 +283,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SignedEnvelope"
+                "$ref": "#/components/schemas/AcceptTransactionRequest"
               }
             }
           }
@@ -252,7 +294,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SignedEnvelope"
+                  "$ref": "#/components/schemas/AcceptTransactionResponse"
                 }
               }
             }
@@ -311,7 +353,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SignedEnvelope"
+                "$ref": "#/components/schemas/AddComplianceEndpointRequest"
               }
             }
           }
@@ -322,7 +364,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SignedEnvelope"
+                  "$ref": "#/components/schemas/AddComplianceEndpointResponse"
                 }
               }
             }
@@ -378,7 +420,8 @@
           }
         ],
         "requestBody": {
-          "required": true,
+          "required": false,
+          "description": "A `SignedEnvelope` with an empty payload when the controller requires client authentication. Omitted entirely when it does not.",
           "content": {
             "application/json": {
               "schema": {

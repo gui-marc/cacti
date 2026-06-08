@@ -27,6 +27,7 @@
     "start:central-bank": "ts-node --transpile-only src/main/typescript/entry/central-bank.ts",
     "start:partner": "ts-node --transpile-only src/main/typescript/entry/partner.ts",
     "all-in-one": "NODE_ENV=default ENVIRONMENT=default ts-node --transpile-only src/main/typescript/entry/all-in-one.ts",
+    "benchmark": "NODE_ENV=default ENVIRONMENT=default ts-node --transpile-only src/main/typescript/entry/benchmark.ts",
     "dev": "concurrently -k -n cb-besu,cb-eth,partner-a,partner-b 'CBDC_CONFIG=./runtime/cb-besu.json yarn start:central-bank' 'CBDC_CONFIG=./runtime/cb-eth.json yarn start:central-bank' 'CBDC_CONFIG=./runtime/partner-a.json yarn start:partner' 'CBDC_CONFIG=./runtime/partner-b.json yarn start:partner'",
     "test": "jest ./src/test/typescript"
   },

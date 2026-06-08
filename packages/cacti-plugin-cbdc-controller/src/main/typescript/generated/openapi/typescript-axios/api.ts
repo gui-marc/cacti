@@ -37,6 +37,20 @@ export interface AcceptTransactionPayload {
     'transactionId': string;
 }
 /**
+ * @type AcceptTransactionRequest
+ * Body of an accept-transaction request. A `SignedEnvelope` when the controller requires client authentication, or a bare `AcceptTransactionPayload` when it does not.
+ * @export
+ */
+export type AcceptTransactionRequest = AcceptTransactionPayload | SignedEnvelope;
+
+/**
+ * @type AcceptTransactionResponse
+ * Body of an accept-transaction response. A `SignedEnvelope` when the controller requires client authentication, or a bare `AcceptTransactionResponsePayload` when it does not.
+ * @export
+ */
+export type AcceptTransactionResponse = AcceptTransactionResponsePayload | SignedEnvelope;
+
+/**
  * Inner payload of the signed accept-transaction response.
  * @export
  * @interface AcceptTransactionResponsePayload
@@ -81,6 +95,20 @@ export interface AddComplianceEndpointPayload {
      */
     'url': string;
 }
+/**
+ * @type AddComplianceEndpointRequest
+ * Body of an add-compliance-endpoint request. A `SignedEnvelope` when the controller requires client authentication, or a bare `AddComplianceEndpointPayload` when it does not.
+ * @export
+ */
+export type AddComplianceEndpointRequest = AddComplianceEndpointPayload | SignedEnvelope;
+
+/**
+ * @type AddComplianceEndpointResponse
+ * Body of an add-compliance-endpoint response. A `SignedEnvelope` when the controller requires client authentication, or a bare `AddComplianceEndpointResponsePayload` when it does not.
+ * @export
+ */
+export type AddComplianceEndpointResponse = AddComplianceEndpointResponsePayload | SignedEnvelope;
+
 /**
  * Inner payload of the signed add-compliance-endpoint response.
  * @export
@@ -175,6 +203,20 @@ export interface InitiateTransactionPayload {
     'complianceProviders': Array<string>;
 }
 /**
+ * @type InitiateTransactionRequest
+ * Body of an initiate-transaction request. A `SignedEnvelope` when the controller requires client authentication, or a bare `InitiateTransactionPayload` when it does not.
+ * @export
+ */
+export type InitiateTransactionRequest = InitiateTransactionPayload | SignedEnvelope;
+
+/**
+ * @type InitiateTransactionResponse
+ * Body of an initiate-transaction response. A `SignedEnvelope` when the controller requires client authentication, or a bare `InitiateTransactionResponsePayload` when it does not.
+ * @export
+ */
+export type InitiateTransactionResponse = InitiateTransactionResponsePayload | SignedEnvelope;
+
+/**
  * Inner payload of the signed initiate-transaction response.
  * @export
  * @interface InitiateTransactionResponsePayload
@@ -235,13 +277,13 @@ export const ComplianceApiAxiosParamCreator = function (configuration?: Configur
         /**
          * Adds a new compliance provider endpoint to the controller\'s store. The server generates the endpoint\'s id. The request body must be a `SignedEnvelope` whose inner payload is an `AddComplianceEndpointPayload`. The 201 response body is a `SignedEnvelope` whose inner payload is an `AddComplianceEndpointResponsePayload`.
          * @summary Register a compliance endpoint.
-         * @param {SignedEnvelope} signedEnvelope 
+         * @param {AddComplianceEndpointRequest} addComplianceEndpointRequest 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        addComplianceEndpointV1: async (signedEnvelope: SignedEnvelope, options: AxiosRequestConfig = {}): Promise<RequestArgs> => {
-            // verify required parameter 'signedEnvelope' is not null or undefined
-            assertParamExists('addComplianceEndpointV1', 'signedEnvelope', signedEnvelope)
+        addComplianceEndpointV1: async (addComplianceEndpointRequest: AddComplianceEndpointRequest, options: AxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'addComplianceEndpointRequest' is not null or undefined
+            assertParamExists('addComplianceEndpointV1', 'addComplianceEndpointRequest', addComplianceEndpointRequest)
             const localVarPath = `/api/v1/plugins/@hyperledger-cacti/cacti-plugin-cbdc-controller/compliance-endpoint`;
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
@@ -261,7 +303,7 @@ export const ComplianceApiAxiosParamCreator = function (configuration?: Configur
             setSearchParams(localVarUrlObj, localVarQueryParameter);
             let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
             localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
-            localVarRequestOptions.data = serializeDataIfNeeded(signedEnvelope, localVarRequestOptions, configuration)
+            localVarRequestOptions.data = serializeDataIfNeeded(addComplianceEndpointRequest, localVarRequestOptions, configuration)
 
             return {
                 url: toPathString(localVarUrlObj),
@@ -272,15 +314,13 @@ export const ComplianceApiAxiosParamCreator = function (configuration?: Configur
          * Deletes a previously registered compliance provider endpoint by its id. The request body must be a `SignedEnvelope` with an empty payload (used only for authentication). Returns 204 No Content on success.
          * @summary Remove a compliance endpoint.
          * @param {string} id The server-generated UUID of the compliance endpoint to remove.
-         * @param {SignedEnvelope} signedEnvelope 
+         * @param {SignedEnvelope} [signedEnvelope] A &#x60;SignedEnvelope&#x60; with an empty payload when the controller requires client authentication. Omitted entirely when it does not.
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        removeComplianceEndpointV1: async (id: string, signedEnvelope: SignedEnvelope, options: AxiosRequestConfig = {}): Promise<RequestArgs> => {
+        removeComplianceEndpointV1: async (id: string, signedEnvelope?: SignedEnvelope, options: AxiosRequestConfig = {}): Promise<RequestArgs> => {
             // verify required parameter 'id' is not null or undefined
             assertParamExists('removeComplianceEndpointV1', 'id', id)
-            // verify required parameter 'signedEnvelope' is not null or undefined
-            assertParamExists('removeComplianceEndpointV1', 'signedEnvelope', signedEnvelope)
             const localVarPath = `/api/v1/plugins/@hyperledger-cacti/cacti-plugin-cbdc-controller/compliance-endpoint/{id}`
                 .replace(`{${"id"}}`, encodeURIComponent(String(id)));
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
@@ -321,23 +361,23 @@ export const ComplianceApiFp = function(configuration?: Configuration) {
         /**
          * Adds a new compliance provider endpoint to the controller\'s store. The server generates the endpoint\'s id. The request body must be a `SignedEnvelope` whose inner payload is an `AddComplianceEndpointPayload`. The 201 response body is a `SignedEnvelope` whose inner payload is an `AddComplianceEndpointResponsePayload`.
          * @summary Register a compliance endpoint.
-         * @param {SignedEnvelope} signedEnvelope 
+         * @param {AddComplianceEndpointRequest} addComplianceEndpointRequest 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async addComplianceEndpointV1(signedEnvelope: SignedEnvelope, options?: AxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<SignedEnvelope>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.addComplianceEndpointV1(signedEnvelope, options);
+        async addComplianceEndpointV1(addComplianceEndpointRequest: AddComplianceEndpointRequest, options?: AxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<AddComplianceEndpointResponse>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.addComplianceEndpointV1(addComplianceEndpointRequest, options);
             return createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration);
         },
         /**
          * Deletes a previously registered compliance provider endpoint by its id. The request body must be a `SignedEnvelope` with an empty payload (used only for authentication). Returns 204 No Content on success.
          * @summary Remove a compliance endpoint.
          * @param {string} id The server-generated UUID of the compliance endpoint to remove.
-         * @param {SignedEnvelope} signedEnvelope 
+         * @param {SignedEnvelope} [signedEnvelope] A &#x60;SignedEnvelope&#x60; with an empty payload when the controller requires client authentication. Omitted entirely when it does not.
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async removeComplianceEndpointV1(id: string, signedEnvelope: SignedEnvelope, options?: AxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>> {
+        async removeComplianceEndpointV1(id: string, signedEnvelope?: SignedEnvelope, options?: AxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>> {
             const localVarAxiosArgs = await localVarAxiosParamCreator.removeComplianceEndpointV1(id, signedEnvelope, options);
             return createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration);
         },
@@ -354,22 +394,22 @@ export const ComplianceApiFactory = function (configuration?: Configuration, bas
         /**
          * Adds a new compliance provider endpoint to the controller\'s store. The server generates the endpoint\'s id. The request body must be a `SignedEnvelope` whose inner payload is an `AddComplianceEndpointPayload`. The 201 response body is a `SignedEnvelope` whose inner payload is an `AddComplianceEndpointResponsePayload`.
          * @summary Register a compliance endpoint.
-         * @param {SignedEnvelope} signedEnvelope 
+         * @param {AddComplianceEndpointRequest} addComplianceEndpointRequest 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        addComplianceEndpointV1(signedEnvelope: SignedEnvelope, options?: any): AxiosPromise<SignedEnvelope> {
-            return localVarFp.addComplianceEndpointV1(signedEnvelope, options).then((request) => request(axios, basePath));
+        addComplianceEndpointV1(addComplianceEndpointRequest: AddComplianceEndpointRequest, options?: any): AxiosPromise<AddComplianceEndpointResponse> {
+            return localVarFp.addComplianceEndpointV1(addComplianceEndpointRequest, options).then((request) => request(axios, basePath));
         },
         /**
          * Deletes a previously registered compliance provider endpoint by its id. The request body must be a `SignedEnvelope` with an empty payload (used only for authentication). Returns 204 No Content on success.
          * @summary Remove a compliance endpoint.
          * @param {string} id The server-generated UUID of the compliance endpoint to remove.
-         * @param {SignedEnvelope} signedEnvelope 
+         * @param {SignedEnvelope} [signedEnvelope] A &#x60;SignedEnvelope&#x60; with an empty payload when the controller requires client authentication. Omitted entirely when it does not.
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        removeComplianceEndpointV1(id: string, signedEnvelope: SignedEnvelope, options?: any): AxiosPromise<void> {
+        removeComplianceEndpointV1(id: string, signedEnvelope?: SignedEnvelope, options?: any): AxiosPromise<void> {
             return localVarFp.removeComplianceEndpointV1(id, signedEnvelope, options).then((request) => request(axios, basePath));
         },
     };
@@ -385,25 +425,25 @@ export class ComplianceApi extends BaseAPI {
     /**
      * Adds a new compliance provider endpoint to the controller\'s store. The server generates the endpoint\'s id. The request body must be a `SignedEnvelope` whose inner payload is an `AddComplianceEndpointPayload`. The 201 response body is a `SignedEnvelope` whose inner payload is an `AddComplianceEndpointResponsePayload`.
      * @summary Register a compliance endpoint.
-     * @param {SignedEnvelope} signedEnvelope 
+     * @param {AddComplianceEndpointRequest} addComplianceEndpointRequest 
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      * @memberof ComplianceApi
      */
-    public addComplianceEndpointV1(signedEnvelope: SignedEnvelope, options?: AxiosRequestConfig) {
-        return ComplianceApiFp(this.configuration).addComplianceEndpointV1(signedEnvelope, options).then((request) => request(this.axios, this.basePath));
+    public addComplianceEndpointV1(addComplianceEndpointRequest: AddComplianceEndpointRequest, options?: AxiosRequestConfig) {
+        return ComplianceApiFp(this.configuration).addComplianceEndpointV1(addComplianceEndpointRequest, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**
      * Deletes a previously registered compliance provider endpoint by its id. The request body must be a `SignedEnvelope` with an empty payload (used only for authentication). Returns 204 No Content on success.
      * @summary Remove a compliance endpoint.
      * @param {string} id The server-generated UUID of the compliance endpoint to remove.
-     * @param {SignedEnvelope} signedEnvelope 
+     * @param {SignedEnvelope} [signedEnvelope] A &#x60;SignedEnvelope&#x60; with an empty payload when the controller requires client authentication. Omitted entirely when it does not.
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      * @memberof ComplianceApi
      */
-    public removeComplianceEndpointV1(id: string, signedEnvelope: SignedEnvelope, options?: AxiosRequestConfig) {
+    public removeComplianceEndpointV1(id: string, signedEnvelope?: SignedEnvelope, options?: AxiosRequestConfig) {
         return ComplianceApiFp(this.configuration).removeComplianceEndpointV1(id, signedEnvelope, options).then((request) => request(this.axios, this.basePath));
     }
 }
@@ -418,13 +458,13 @@ export const TransactionsApiAxiosParamCreator = function (configuration?: Config
         /**
          * Confirms a transaction so the controller proceeds with execution. The request body must be a `SignedEnvelope` whose inner payload is an `AcceptTransactionPayload`. Only the partner that initiated the transaction may accept it. The 200 response body is a `SignedEnvelope` whose inner payload is an `AcceptTransactionResponsePayload`, bound to the request\'s nonce.
          * @summary Accept a transaction previously marked for review.
-         * @param {SignedEnvelope} signedEnvelope 
+         * @param {AcceptTransactionRequest} acceptTransactionRequest 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        acceptTransactionV1: async (signedEnvelope: SignedEnvelope, options: AxiosRequestConfig = {}): Promise<RequestArgs> => {
-            // verify required parameter 'signedEnvelope' is not null or undefined
-            assertParamExists('acceptTransactionV1', 'signedEnvelope', signedEnvelope)
+        acceptTransactionV1: async (acceptTransactionRequest: AcceptTransactionRequest, options: AxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'acceptTransactionRequest' is not null or undefined
+            assertParamExists('acceptTransactionV1', 'acceptTransactionRequest', acceptTransactionRequest)
             const localVarPath = `/api/v1/plugins/@hyperledger-cacti/cacti-plugin-cbdc-controller/accept-transaction`;
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
@@ -444,7 +484,7 @@ export const TransactionsApiAxiosParamCreator = function (configuration?: Config
             setSearchParams(localVarUrlObj, localVarQueryParameter);
             let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
             localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
-            localVarRequestOptions.data = serializeDataIfNeeded(signedEnvelope, localVarRequestOptions, configuration)
+            localVarRequestOptions.data = serializeDataIfNeeded(acceptTransactionRequest, localVarRequestOptions, configuration)
 
             return {
                 url: toPathString(localVarUrlObj),
@@ -454,13 +494,13 @@ export const TransactionsApiAxiosParamCreator = function (configuration?: Config
         /**
          * Submits a new CBDC transaction request to the controller for compliance evaluation and execution. The request body must be a `SignedEnvelope` whose inner payload is an `InitiateTransactionPayload`. The 200/202 response body is a `SignedEnvelope` whose inner payload is an `InitiateTransactionResponsePayload`, bound to the request\'s nonce.
          * @summary Initiate a cross-ledger CBDC transaction.
-         * @param {SignedEnvelope} signedEnvelope 
+         * @param {InitiateTransactionRequest} initiateTransactionRequest 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        initiateTransactionV1: async (signedEnvelope: SignedEnvelope, options: AxiosRequestConfig = {}): Promise<RequestArgs> => {
-            // verify required parameter 'signedEnvelope' is not null or undefined
-            assertParamExists('initiateTransactionV1', 'signedEnvelope', signedEnvelope)
+        initiateTransactionV1: async (initiateTransactionRequest: InitiateTransactionRequest, options: AxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'initiateTransactionRequest' is not null or undefined
+            assertParamExists('initiateTransactionV1', 'initiateTransactionRequest', initiateTransactionRequest)
             const localVarPath = `/api/v1/plugins/@hyperledger-cacti/cacti-plugin-cbdc-controller/initiate-transaction`;
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
@@ -480,7 +520,7 @@ export const TransactionsApiAxiosParamCreator = function (configuration?: Config
             setSearchParams(localVarUrlObj, localVarQueryParameter);
             let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
             localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
-            localVarRequestOptions.data = serializeDataIfNeeded(signedEnvelope, localVarRequestOptions, configuration)
+            localVarRequestOptions.data = serializeDataIfNeeded(initiateTransactionRequest, localVarRequestOptions, configuration)
 
             return {
                 url: toPathString(localVarUrlObj),
@@ -500,23 +540,23 @@ export const TransactionsApiFp = function(configuration?: Configuration) {
         /**
          * Confirms a transaction so the controller proceeds with execution. The request body must be a `SignedEnvelope` whose inner payload is an `AcceptTransactionPayload`. Only the partner that initiated the transaction may accept it. The 200 response body is a `SignedEnvelope` whose inner payload is an `AcceptTransactionResponsePayload`, bound to the request\'s nonce.
          * @summary Accept a transaction previously marked for review.
-         * @param {SignedEnvelope} signedEnvelope 
+         * @param {AcceptTransactionRequest} acceptTransactionRequest 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async acceptTransactionV1(signedEnvelope: SignedEnvelope, options?: AxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<SignedEnvelope>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.acceptTransactionV1(signedEnvelope, options);
+        async acceptTransactionV1(acceptTransactionRequest: AcceptTransactionRequest, options?: AxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<AcceptTransactionResponse>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.acceptTransactionV1(acceptTransactionRequest, options);
             return createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration);
         },
         /**
          * Submits a new CBDC transaction request to the controller for compliance evaluation and execution. The request body must be a `SignedEnvelope` whose inner payload is an `InitiateTransactionPayload`. The 200/202 response body is a `SignedEnvelope` whose inner payload is an `InitiateTransactionResponsePayload`, bound to the request\'s nonce.
          * @summary Initiate a cross-ledger CBDC transaction.
-         * @param {SignedEnvelope} signedEnvelope 
+         * @param {InitiateTransactionRequest} initiateTransactionRequest 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async initiateTransactionV1(signedEnvelope: SignedEnvelope, options?: AxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<SignedEnvelope>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.initiateTransactionV1(signedEnvelope, options);
+        async initiateTransactionV1(initiateTransactionRequest: InitiateTransactionRequest, options?: AxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<InitiateTransactionResponse>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.initiateTransactionV1(initiateTransactionRequest, options);
             return createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration);
         },
     }
@@ -532,22 +572,22 @@ export const TransactionsApiFactory = function (configuration?: Configuration, b
         /**
          * Confirms a transaction so the controller proceeds with execution. The request body must be a `SignedEnvelope` whose inner payload is an `AcceptTransactionPayload`. Only the partner that initiated the transaction may accept it. The 200 response body is a `SignedEnvelope` whose inner payload is an `AcceptTransactionResponsePayload`, bound to the request\'s nonce.
          * @summary Accept a transaction previously marked for review.
-         * @param {SignedEnvelope} signedEnvelope 
+         * @param {AcceptTransactionRequest} acceptTransactionRequest 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        acceptTransactionV1(signedEnvelope: SignedEnvelope, options?: any): AxiosPromise<SignedEnvelope> {
-            return localVarFp.acceptTransactionV1(signedEnvelope, options).then((request) => request(axios, basePath));
+        acceptTransactionV1(acceptTransactionRequest: AcceptTransactionRequest, options?: any): AxiosPromise<AcceptTransactionResponse> {
+            return localVarFp.acceptTransactionV1(acceptTransactionRequest, options).then((request) => request(axios, basePath));
         },
         /**
          * Submits a new CBDC transaction request to the controller for compliance evaluation and execution. The request body must be a `SignedEnvelope` whose inner payload is an `InitiateTransactionPayload`. The 200/202 response body is a `SignedEnvelope` whose inner payload is an `InitiateTransactionResponsePayload`, bound to the request\'s nonce.
          * @summary Initiate a cross-ledger CBDC transaction.
-         * @param {SignedEnvelope} signedEnvelope 
+         * @param {InitiateTransactionRequest} initiateTransactionRequest 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        initiateTransactionV1(signedEnvelope: SignedEnvelope, options?: any): AxiosPromise<SignedEnvelope> {
-            return localVarFp.initiateTransactionV1(signedEnvelope, options).then((request) => request(axios, basePath));
+        initiateTransactionV1(initiateTransactionRequest: InitiateTransactionRequest, options?: any): AxiosPromise<InitiateTransactionResponse> {
+            return localVarFp.initiateTransactionV1(initiateTransactionRequest, options).then((request) => request(axios, basePath));
         },
     };
 };
@@ -562,25 +602,25 @@ export class TransactionsApi extends BaseAPI {
     /**
      * Confirms a transaction so the controller proceeds with execution. The request body must be a `SignedEnvelope` whose inner payload is an `AcceptTransactionPayload`. Only the partner that initiated the transaction may accept it. The 200 response body is a `SignedEnvelope` whose inner payload is an `AcceptTransactionResponsePayload`, bound to the request\'s nonce.
      * @summary Accept a transaction previously marked for review.
-     * @param {SignedEnvelope} signedEnvelope 
+     * @param {AcceptTransactionRequest} acceptTransactionRequest 
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      * @memberof TransactionsApi
      */
-    public acceptTransactionV1(signedEnvelope: SignedEnvelope, options?: AxiosRequestConfig) {
-        return TransactionsApiFp(this.configuration).acceptTransactionV1(signedEnvelope, options).then((request) => request(this.axios, this.basePath));
+    public acceptTransactionV1(acceptTransactionRequest: AcceptTransactionRequest, options?: AxiosRequestConfig) {
+        return TransactionsApiFp(this.configuration).acceptTransactionV1(acceptTransactionRequest, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**
      * Submits a new CBDC transaction request to the controller for compliance evaluation and execution. The request body must be a `SignedEnvelope` whose inner payload is an `InitiateTransactionPayload`. The 200/202 response body is a `SignedEnvelope` whose inner payload is an `InitiateTransactionResponsePayload`, bound to the request\'s nonce.
      * @summary Initiate a cross-ledger CBDC transaction.
-     * @param {SignedEnvelope} signedEnvelope 
+     * @param {InitiateTransactionRequest} initiateTransactionRequest 
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      * @memberof TransactionsApi
      */
-    public initiateTransactionV1(signedEnvelope: SignedEnvelope, options?: AxiosRequestConfig) {
-        return TransactionsApiFp(this.configuration).initiateTransactionV1(signedEnvelope, options).then((request) => request(this.axios, this.basePath));
+    public initiateTransactionV1(initiateTransactionRequest: InitiateTransactionRequest, options?: AxiosRequestConfig) {
+        return TransactionsApiFp(this.configuration).initiateTransactionV1(initiateTransactionRequest, options).then((request) => request(this.axios, this.basePath));
     }
 }
 

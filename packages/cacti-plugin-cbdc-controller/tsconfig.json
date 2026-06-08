@@ -12,7 +12,8 @@
       "@test/*": ["./src/test/typescript/*"]
     },
     "resolveJsonModule": true,
-    "types": ["jest"]
+    "types": ["jest"],
+    "experimentalDecorators": false
   },
   "include": ["./src", "src/**/*.json"],
   "exclude": ["**/*.test.ts"],

@@ -438,7 +438,7 @@ export default class CBDCController {
       sourceEnvironment.getAsset(senderAddress, amount),
       destinationEnvironment.getAsset(
         receiverAddress,
-        Math.floor(amount * transaction.fxRate! * 1e6),
+        Math.floor(amount * transaction.fxRate!),
       ),
     ]);
 

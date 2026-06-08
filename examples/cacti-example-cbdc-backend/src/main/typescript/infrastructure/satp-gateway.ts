@@ -68,6 +68,16 @@ export async function startSatpGateway(
   });
   await knexRemote.migrate.latest();
 
+  // These two Knex instances exist only to run the migrations above. The
+  // gateway opens its *own* connection pools from the same config objects
+  // (localRepository / remoteRepository below), so leaving these open means
+  // two writer pools share each WAL-mode SQLite file. Under the sustained
+  // per-transfer logging of a benchmark that cross-pool contention
+  // intermittently surfaces as `SQLITE_IOERR: disk I/O error`. Close them now
+  // that migrations are done; the gateway's pools keep the schema on disk.
+  await knexLocal.destroy();
+  await knexRemote.destroy();
+
   const monitorService = MonitorService.createOrGetMonitorService({
     enabled: false,
   });
@@ -93,9 +103,8 @@ export async function startSatpGateway(
     knexLocal,
     knexRemote,
     shutdown: async () => {
+      // knexLocal / knexRemote were already destroyed right after migrating.
       await gateway.shutdown();
-      await knexLocal.destroy();
-      await knexRemote.destroy();
     },
   };
 }
