@@ -68,7 +68,9 @@
     "codegen:openapi": "run-s generate-sdk",
     "generate-sdk": "run-s 'generate-sdk:*'",
     "generate-sdk:typescript-axios": "openapi-generator-cli generate -i ./src/main/json/openapi.json -g typescript-axios -o ./src/main/typescript/generated/openapi/typescript-axios/ --reserved-words-mappings protected=protected --enable-post-process-file",
-    "tsc": "tsc --project ./tsconfig.json"
+    "tsc": "tsc --project ./tsconfig.json",
+    "benchmark:amm": "ts-node --transpile-only src/test/typescript/benchmarks/besu-amm-fx.benchmark.ts",
+    "benchmark:rfq": "ts-node --transpile-only src/test/typescript/benchmarks/besu-rfq-fx.benchmark.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -99,6 +101,7 @@
     "prettier": "^3.8.1",
     "sqlite3": "^6.0.1",
     "ts-jest": "^29.4.6",
+    "ts-node": "^10.9.2",
     "ts-results": "^3.3.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.57.1",

@@ -126,21 +126,42 @@ describe("DummyBesuAMMEnvironment", () => {
     expect(env.getFactoryAddress()).toMatch(/^0x[0-9a-fA-F]{40}$/);
   });
 
-  it("rejects swaps when the source currency is not registered", async () => {
+  it("rejects locks when the source currency is not registered", async () => {
     await expect(
-      env.swap("JPY", "EUR", 100, env.ownerSigningCredential, env.ownerAccount),
+      env.lock(
+        uuidv4(),
+        "JPY",
+        "EUR",
+        100,
+        env.ownerAccount,
+        env.ownerSigningCredential,
+      ),
     ).rejects.toThrow(/JPY/);
   });
 
-  it("rejects swaps when the destination currency is not registered", async () => {
+  it("rejects locks when the destination currency is not registered", async () => {
     await expect(
-      env.swap("USD", "JPY", 100, env.ownerSigningCredential, env.ownerAccount),
+      env.lock(
+        uuidv4(),
+        "USD",
+        "JPY",
+        100,
+        env.ownerAccount,
+        env.ownerSigningCredential,
+      ),
     ).rejects.toThrow(/JPY/);
   });
 
-  it("rejects swaps when no pair has been created yet", async () => {
+  it("rejects locks when no pair has been created yet", async () => {
     await expect(
-      env.swap("USD", "EUR", 100, env.ownerSigningCredential, env.ownerAccount),
+      env.lock(
+        uuidv4(),
+        "USD",
+        "EUR",
+        100,
+        env.ownerAccount,
+        env.ownerSigningCredential,
+      ),
     ).rejects.toThrow(/No pair/);
   });
 
@@ -167,19 +188,21 @@ describe("DummyBesuAMMEnvironment", () => {
   );
 
   it(
-    "swaps tokens, returns a quote, and credits the recipient",
+    "locks a quote, holds the rate, and credits the recipient on settlement",
     async () => {
       const recipient = await env.ledger.createEthTestAccount();
       const recipientBefore = await balanceOf(tokenB, recipient.address);
       expect(recipientBefore).toBe(0n);
 
       const amountIn = 1_000;
-      const quote = await env.swap(
+      const txId = uuidv4();
+      const quote = await env.lock(
+        txId,
         "USD",
         "EUR",
         amountIn,
-        env.ownerSigningCredential,
         recipient.address,
+        env.ownerSigningCredential,
       );
 
       expect(typeof quote.id).toBe("string");
@@ -191,9 +214,22 @@ describe("DummyBesuAMMEnvironment", () => {
       expect(quote.rate).toBeLessThan(2);
       expect(quote.availableLiquidity).toBeGreaterThan(0);
 
+      // The lock only earmarks the output; nothing is credited until settlement.
+      const recipientMid = await balanceOf(tokenB, recipient.address);
+      expect(recipientMid).toBe(0n);
+
+      await env.settle(
+        txId,
+        "USD",
+        "EUR",
+        amountIn,
+        env.ownerSigningCredential,
+      );
+
       const recipientAfter = await balanceOf(tokenB, recipient.address);
       const received = Number(recipientAfter - recipientBefore);
       expect(received).toBeGreaterThan(0);
+      // Settlement honours the rate that was locked, with no slippage.
       expect(received).toBeCloseTo(amountIn * quote.rate, 0);
     },
     TIMEOUT,

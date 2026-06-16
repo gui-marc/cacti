@@ -796,7 +796,7 @@ export class BesuTestEnvironment {
     await this.ledger.destroy();
   }
 
-   public async getBalance(
+  public async getBalance(
     contract_name: string,
     contract_address: string,
     contract_abi: any,
@@ -816,5 +816,4 @@ export class BesuTestEnvironment {
 
     return responseBalanceBridge.callOutput;
   }
-
 }

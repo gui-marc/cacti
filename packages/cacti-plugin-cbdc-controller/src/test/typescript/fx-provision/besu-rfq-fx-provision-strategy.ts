@@ -26,6 +26,7 @@ export class BesuRFQFXProvisionStrategy extends FXProvisionStrategy {
   }
 
   async requestFXQuote(
+    transactionId: string,
     baseCurrency: string,
     destinationCurrency: string,
     amount: number,
@@ -54,45 +55,41 @@ export class BesuRFQFXProvisionStrategy extends FXProvisionStrategy {
       );
     }
 
-    this.pending.set(
-      this.key(baseCurrency, destinationCurrency, amount),
-      result.quoteId,
-    );
+    this.pending.set(transactionId, result.quoteId);
 
     return fxQuote;
   }
 
   async releaseLiquidity(
-    baseCurrency: string,
-    destinationCurrency: string,
-    amount: number,
+    transactionId: string,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _baseCurrency: string,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _destinationCurrency: string,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _amount: number,
   ): Promise<void> {
-    const k = this.key(baseCurrency, destinationCurrency, amount);
-    const quoteId = this.pending.get(k);
+    const quoteId = this.pending.get(transactionId);
     if (!quoteId) {
       return;
     }
     await this.besuRFQ.releaseQuote(quoteId);
-    this.pending.delete(k);
+    this.pending.delete(transactionId);
   }
 
   async confirmSettlement(
+    transactionId: string,
     baseCurrency: string,
     destinationCurrency: string,
     amount: number,
   ): Promise<void> {
-    const k = this.key(baseCurrency, destinationCurrency, amount);
-    const quoteId = this.pending.get(k);
+    const quoteId = this.pending.get(transactionId);
     if (!quoteId) {
       throw new Error(
-        `No pending RFQ quote for ${baseCurrency}->${destinationCurrency} amount=${amount}`,
+        `No pending RFQ quote for tx=${transactionId} (${baseCurrency}->${destinationCurrency} amount=${amount})`,
       );
     }
     await this.besuRFQ.settleQuote(quoteId, this.takerSigningCredential);
-    this.pending.delete(k);
-  }
-
-  private key(base: string, dest: string, amount: number): string {
-    return `${base}|${dest}|${amount}`;
+    this.pending.delete(transactionId);
   }
 }

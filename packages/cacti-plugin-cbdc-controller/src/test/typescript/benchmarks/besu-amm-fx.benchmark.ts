@@ -117,28 +117,36 @@ async function run() {
 
   console.log(`Warming up for ${WARMUP} iterations...`);
   for (let i = 0; i < WARMUP; i++) {
-    await strategy.requestFXQuote(USD, EUR, 100, {
+    const txId = randomUUID();
+    await strategy.requestFXQuote(txId, USD, EUR, 100, {
       min: 0,
     });
-    await strategy.releaseLiquidity(USD, EUR, 100);
+    await strategy.releaseLiquidity(txId, USD, EUR, 100);
   }
 
   console.log(`Running benchmark for ${ITERATIONS} iterations...`);
   for (let i = 0; i < ITERATIONS; i++) {
+    // Each lock is held under its own transaction id. requestFXQuote and
+    // releaseLiquidity are measured against one lock...
+    const releaseTxId = randomUUID();
     const { ms: requestFXQuoteMs } = await timed(() =>
-      strategy.requestFXQuote(USD, EUR, 100, {
+      strategy.requestFXQuote(releaseTxId, USD, EUR, 100, {
         min: 0,
       }),
     );
     requestFXQuoteTimings.push(requestFXQuoteMs);
 
     const { ms: releaseLiquidityMs } = await timed(() =>
-      strategy.releaseLiquidity(USD, EUR, 100),
+      strategy.releaseLiquidity(releaseTxId, USD, EUR, 100),
     );
     releaseLiquidityTimings.push(releaseLiquidityMs);
 
+    // ...and confirmSettlement against a fresh lock, since settling requires an
+    // active (un-released) lock.
+    const settleTxId = randomUUID();
+    await strategy.requestFXQuote(settleTxId, USD, EUR, 100, { min: 0 });
     const { ms: confirmSettlementMs } = await timed(() =>
-      strategy.confirmSettlement(USD, EUR, 100),
+      strategy.confirmSettlement(settleTxId, USD, EUR, 100),
     );
     confirmSettlementTimings.push(confirmSettlementMs);
   }

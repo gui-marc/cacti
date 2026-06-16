@@ -326,7 +326,12 @@ describe("Transaction Controller", () => {
       const persisted = await transactionStore.get(result.transactionId);
       expect(persisted!.status).toBe(TransactionStatus.EXPIRED);
       expect(releaseSpy).toHaveBeenCalledTimes(1);
-      expect(releaseSpy).toHaveBeenCalledWith("cbdc_a", "cbdc_b", 100);
+      expect(releaseSpy).toHaveBeenCalledWith(
+        result.transactionId,
+        "cbdc_a",
+        "cbdc_b",
+        100,
+      );
     });
 
     it("clears the expiry timer when accepted before the deadline", async () => {

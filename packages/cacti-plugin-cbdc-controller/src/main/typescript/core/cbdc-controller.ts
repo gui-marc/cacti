@@ -81,6 +81,7 @@ export default class CBDCController {
       await this.requestTransactionFXRate(transaction);
     } catch (error) {
       await this.fxProvisionStrategy.releaseLiquidity(
+        transactionID,
         req.sourceChainCode,
         req.destinationChainCode,
         req.amount,
@@ -105,6 +106,7 @@ export default class CBDCController {
 
     if (complianceResult === ComplianceResult.REJECTED) {
       await this.fxProvisionStrategy.releaseLiquidity(
+        transactionID,
         req.sourceChainCode,
         req.destinationChainCode,
         req.amount,
@@ -190,6 +192,7 @@ export default class CBDCController {
     }
     try {
       await this.fxProvisionStrategy.releaseLiquidity(
+        transactionId,
         transaction.sourceChainCode,
         transaction.destinationChainCode,
         transaction.amount,
@@ -225,6 +228,7 @@ export default class CBDCController {
 
     try {
       await this.fxProvisionStrategy.confirmSettlement(
+        transaction.id,
         transaction.sourceChainCode,
         transaction.destinationChainCode,
         transaction.amount,
@@ -246,6 +250,7 @@ export default class CBDCController {
     transaction: ITransaction,
   ): Promise<void> {
     const quote = await this.fxProvisionStrategy.requestFXQuote(
+      transaction.id,
       transaction.sourceChainCode,
       transaction.destinationChainCode,
       transaction.amount,

@@ -12,7 +12,11 @@ export type DynamicRange =
   | { min: number; max: number };
 
 export abstract class FXProvisionStrategy {
+  // `transactionId` correlates the on-chain lock created by `requestFXQuote`
+  // with the later `releaseLiquidity`/`confirmSettlement` calls. Callers must
+  // pass the same id (e.g. the transaction id) across all three methods.
   abstract requestFXQuote(
+    transactionId: string,
     baseCurrency: string,
     destinationCurrency: string,
     amount: number,
@@ -20,12 +24,14 @@ export abstract class FXProvisionStrategy {
   ): Promise<FXQuote>;
 
   abstract releaseLiquidity(
+    transactionId: string,
     baseCurrency: string,
     destinationCurrency: string,
     amount: number,
   ): Promise<void>;
 
   abstract confirmSettlement(
+    transactionId: string,
     baseCurrency: string,
     destinationCurrency: string,
     amount: number,

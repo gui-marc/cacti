@@ -11,6 +11,7 @@ export default class ConstantFxProvisionStrategy extends FXProvisionStrategy {
   }
 
   requestFXQuote(
+    transactionId: string,
     baseCurrency: string,
     destinationCurrency: string,
     amount: number,
@@ -26,6 +27,7 @@ export default class ConstantFxProvisionStrategy extends FXProvisionStrategy {
   }
 
   releaseLiquidity(
+    transactionId: string,
     baseCurrency: string,
     destinationCurrency: string,
     amount: number,
@@ -34,6 +36,7 @@ export default class ConstantFxProvisionStrategy extends FXProvisionStrategy {
   }
 
   confirmSettlement(
+    transactionId: string,
     baseCurrency: string,
     destinationCurrency: string,
     amount: number,

@@ -722,7 +722,7 @@ export class EthereumTestEnvironment {
     });
   }
 
-    public async getBalance(
+  public async getBalance(
     contract_name: string,
     contract_address: string,
     contract_abi: any,
@@ -743,7 +743,7 @@ export class EthereumTestEnvironment {
       params: [account],
       web3SigningCredential: signingCredential,
     });
-    
+
     return responseBalanceBridge.callOutput;
   }
 }

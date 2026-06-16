@@ -25,55 +25,70 @@ export class BesuAMMFXProvisionStrategy extends FXProvisionStrategy {
   }
 
   async requestFXQuote(
+    transactionId: string,
     baseCurrency: string,
     destinationCurrency: string,
     amount: number,
     priceRange: DynamicRange,
   ): Promise<FXQuote> {
-    const quote = await this.besuAMM.getQuote(
-      baseCurrency,
-      destinationCurrency,
-      amount,
-    );
+    // Translate the rate range into on-chain output bounds enforced atomically
+    // inside `lock()`. Non-finite / sentinel bounds collapse to "unbounded"
+    // (0 means no max; a negative lower bound clamps to 0).
+    const minAmountOut =
+      priceRange.min !== undefined && Number.isFinite(priceRange.min)
+        ? Math.max(0, Math.floor(amount * priceRange.min))
+        : 0;
+    const maxRaw = priceRange.max !== undefined ? amount * priceRange.max : 0;
+    const maxAmountOut =
+      Number.isFinite(maxRaw) && maxRaw > 0 && maxRaw < Number.MAX_SAFE_INTEGER
+        ? Math.floor(maxRaw)
+        : 0;
 
-    if (priceRange.min !== undefined && quote.rate < priceRange.min) {
+    try {
+      return await this.besuAMM.lock(
+        transactionId,
+        baseCurrency,
+        destinationCurrency,
+        amount,
+        this.recipient,
+        this.signingCredential,
+        { minAmountOut, maxAmountOut },
+      );
+    } catch (error) {
       throw new Error(
         `No quotes available within the specified price range for ${baseCurrency}/${destinationCurrency}`,
+        { cause: error },
       );
     }
-
-    if (priceRange.max !== undefined && quote.rate > priceRange.max) {
-      throw new Error(
-        `No quotes available within the specified price range for ${baseCurrency}/${destinationCurrency}`,
-      );
-    }
-
-    return quote;
   }
 
   async releaseLiquidity(
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    _baseCurrency: string,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    _destinationCurrency: string,
+    transactionId: string,
+    baseCurrency: string,
+    destinationCurrency: string,
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _amount: number,
   ): Promise<void> {
-    // No-op: the AMM holds no per-quote lock, so there is nothing to release.
-    return;
+    await this.besuAMM.release(
+      transactionId,
+      baseCurrency,
+      destinationCurrency,
+      this.signingCredential,
+    );
   }
 
   async confirmSettlement(
+    transactionId: string,
     baseCurrency: string,
     destinationCurrency: string,
     amount: number,
   ): Promise<void> {
-    await this.besuAMM.swap(
+    await this.besuAMM.settle(
+      transactionId,
       baseCurrency,
       destinationCurrency,
       amount,
       this.signingCredential,
-      this.recipient,
     );
   }
 }

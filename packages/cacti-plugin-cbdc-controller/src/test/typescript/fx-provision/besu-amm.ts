@@ -200,6 +200,9 @@ export class DummyBesuAMMEnvironment {
     );
   }
 
+  // Read-only quote: prices `amount` of `from` against the liquidity currently
+  // available in the pool (reserves net of outstanding locks). The pricing math
+  // lives entirely in the pair's `getAmountOut` view.
   public async getQuote(
     from: string,
     to: string,
@@ -210,132 +213,238 @@ export class DummyBesuAMMEnvironment {
 
     const pair = this.requirePair(tokenIn, tokenOut);
 
-    const { amountOut, reserveOut } = await this.computeSwapOutput(
-      pair,
-      tokenIn,
-      amount,
-    );
+    const amountOut = await this.readAmountOut(pair, tokenIn, amount);
+    const availableOut = await this.readAvailableReserveOut(pair, tokenIn);
 
     return {
       id: uuidv4(),
       baseCurrency: from,
       destinationCurrency: to,
       rate: Number(amountOut) / amount,
-      availableLiquidity: Number(reserveOut),
+      availableLiquidity: Number(availableOut),
     };
   }
 
-  public async swap(
+  // Lock-and-hold: earmark the output for `amount` of `from` on-chain so the
+  // held rate is deterministic and slippage-free until the lock is released or
+  // settled. The pair computes and validates `amountOut` itself; `opts` carries
+  // the optional slippage bounds enforced inside `lock()`.
+  public async lock(
+    transactionId: string,
     from: string,
     to: string,
     amount: number,
-    signingCredential: Web3SigningCredential,
     recipient: string,
+    signingCredential: Web3SigningCredential,
+    opts: { minAmountOut?: number; maxAmountOut?: number } = {},
   ): Promise<FXQuote> {
     const tokenIn = this.requireCurrency(from);
     const tokenOut = this.requireCurrency(to);
 
     const pair = this.requirePair(tokenIn, tokenOut);
+    const lockId = this.toLockId(transactionId);
 
-    const { amountIn, amountOut, reserveOut, isInToken0 } =
-      await this.computeSwapOutput(pair, tokenIn, amount);
+    await this.connector.invokeContract({
+      contractName: "LiquidityPoolPair",
+      contractAddress: pair.address,
+      contractAbi: LiquidityPoolPairContract.abi,
+      invocationType: BesuContractInvocationType.Send,
+      methodName: "lock",
+      params: [
+        lockId,
+        amount.toString(),
+        tokenIn.address,
+        recipient,
+        (opts.minAmountOut ?? 0).toString(),
+        (opts.maxAmountOut ?? 0).toString(),
+      ],
+      signingCredential,
+      gas: 9_000_000,
+    });
+
+    // Read back the rate that was actually locked, rather than re-quoting
+    // against the (now reduced) available reserves.
+    const amountOut = await this.readLockAmountOut(pair, lockId);
+    const availableOut = await this.readAvailableReserveOut(pair, tokenIn);
+
+    this.log.info(
+      `Locked ${amount} ${from} -> ${amountOut} ${to} (tx=${transactionId}, recipient=${recipient})`,
+    );
+
+    return {
+      id: transactionId,
+      baseCurrency: from,
+      destinationCurrency: to,
+      rate: Number(amountOut) / amount,
+      availableLiquidity: Number(availableOut),
+    };
+  }
+
+  // Release a held quote, returning the earmarked output to the pool. The
+  // contract no-ops on an unknown or already-released lock, so this is safe to
+  // call on error/expiry paths even if the lock was never created.
+  public async release(
+    transactionId: string,
+    from: string,
+    to: string,
+    signingCredential: Web3SigningCredential,
+  ): Promise<void> {
+    const tokenIn = this.requireCurrency(from);
+    const tokenOut = this.requireCurrency(to);
+
+    const pair = this.requirePair(tokenIn, tokenOut);
+    const lockId = this.toLockId(transactionId);
+
+    await this.connector.invokeContract({
+      contractName: "LiquidityPoolPair",
+      contractAddress: pair.address,
+      contractAbi: LiquidityPoolPairContract.abi,
+      invocationType: BesuContractInvocationType.Send,
+      methodName: "release",
+      params: [lockId],
+      signingCredential,
+      gas: 1_000_000,
+    });
+
+    this.log.info(`Released lock for ${from}->${to} (tx=${transactionId})`);
+  }
+
+  // Settle a held quote at the frozen rate: approve the pool to pull the input,
+  // then consume the lock. The contract no-ops on an already-settled lock.
+  public async settle(
+    transactionId: string,
+    from: string,
+    to: string,
+    amount: number,
+    signingCredential: Web3SigningCredential,
+  ): Promise<void> {
+    const tokenIn = this.requireCurrency(from);
+    const tokenOut = this.requireCurrency(to);
+
+    const pair = this.requirePair(tokenIn, tokenOut);
+    const lockId = this.toLockId(transactionId);
 
     await this.connector.invokeContract({
       contractName: tokenIn.contractName,
       contractAddress: tokenIn.address,
       contractAbi: tokenIn.abi,
       invocationType: BesuContractInvocationType.Send,
-      methodName: "transfer",
-      params: [pair.address, amountIn.toString()],
+      methodName: "approve",
+      params: [pair.address, amount.toString()],
       signingCredential,
       gas: 1_000_000,
     });
-
-    const amount0Out = isInToken0 ? 0n : amountOut;
-    const amount1Out = isInToken0 ? amountOut : 0n;
 
     await this.connector.invokeContract({
       contractName: "LiquidityPoolPair",
       contractAddress: pair.address,
       contractAbi: LiquidityPoolPairContract.abi,
       invocationType: BesuContractInvocationType.Send,
-      methodName: "swap",
-      params: [amount0Out.toString(), amount1Out.toString(), recipient],
+      methodName: "settle",
+      params: [lockId],
       signingCredential,
       gas: 9_000_000,
     });
 
-    const amountOutNum = Number(amountOut);
-    const reserveOutAfter = Number(reserveOut - amountOut);
-
-    this.log.info(
-      `Swapped ${amount} ${from} -> ${amountOutNum} ${to} (recipient=${recipient})`,
-    );
-
-    return {
-      id: uuidv4(),
-      baseCurrency: from,
-      destinationCurrency: to,
-      rate: amountOutNum / amount,
-      availableLiquidity: reserveOutAfter,
-    };
+    this.log.info(`Settled lock for ${from}->${to} (tx=${transactionId})`);
   }
 
-  private async computeSwapOutput(
+  // Derives the bytes32 on-chain lock key from a caller-owned transaction id.
+  // The contract only uses it as a mapping key, so any deterministic hash works.
+  private toLockId(transactionId: string): string {
+    const id = this.web3.utils.soliditySha3({
+      type: "string",
+      value: transactionId,
+    });
+    if (!id) {
+      throw new Error(
+        `Failed to derive lock id from transaction id ${transactionId}`,
+      );
+    }
+    return id;
+  }
+
+  private async readAmountOut(
     pair: { address: string; token0: string },
     tokenIn: BesuTokenInfo,
     amount: number,
-  ): Promise<{
-    amountIn: bigint;
-    amountOut: bigint;
-    reserveIn: bigint;
-    reserveOut: bigint;
-    isInToken0: boolean;
-  }> {
-    const reserve0Res = await this.connector.invokeContract({
+  ): Promise<bigint> {
+    const res = await this.connector.invokeContract({
       contractName: "LiquidityPoolPair",
       contractAddress: pair.address,
       contractAbi: LiquidityPoolPairContract.abi,
       invocationType: BesuContractInvocationType.Call,
-      methodName: "reserve0",
-      params: [],
+      methodName: "getAmountOut",
+      params: [amount.toString(), tokenIn.address],
       signingCredential: this.ownerSigningCredential,
       gas: 1_000_000,
     });
-    const reserve1Res = await this.connector.invokeContract({
-      contractName: "LiquidityPoolPair",
-      contractAddress: pair.address,
-      contractAbi: LiquidityPoolPairContract.abi,
-      invocationType: BesuContractInvocationType.Call,
-      methodName: "reserve1",
-      params: [],
-      signingCredential: this.ownerSigningCredential,
-      gas: 1_000_000,
-    });
+    return BigInt(res.callOutput.toString());
+  }
 
-    const reserve0 = BigInt(reserve0Res.callOutput.toString());
-    const reserve1 = BigInt(reserve1Res.callOutput.toString());
-
+  private async readAvailableReserveOut(
+    pair: { address: string; token0: string },
+    tokenIn: BesuTokenInfo,
+  ): Promise<bigint> {
     const isInToken0 =
       tokenIn.address.toLowerCase() === pair.token0.toLowerCase();
-    const reserveIn = isInToken0 ? reserve0 : reserve1;
-    const reserveOut = isInToken0 ? reserve1 : reserve0;
+    const reserveMethod = isInToken0 ? "reserve1" : "reserve0";
+    const lockedMethod = isInToken0 ? "lockedReserve1" : "lockedReserve0";
 
-    const amountIn = BigInt(amount);
-    if (reserveIn === 0n || reserveOut === 0n) {
-      throw new Error(`No liquidity for pair ${tokenIn.contractName}`);
-    }
-    const amountOut = (amountIn * reserveOut) / (reserveIn + amountIn);
-    if (amountOut <= 0n) {
-      throw new Error(`Computed swap output is zero for amount ${amount}`);
-    }
-    if (amountOut >= reserveOut) {
-      throw new Error(
-        `Insufficient liquidity: requested ${amountOut}, reserve ${reserveOut}`,
-      );
-    }
+    const [reserveRes, lockedRes] = await Promise.all([
+      this.connector.invokeContract({
+        contractName: "LiquidityPoolPair",
+        contractAddress: pair.address,
+        contractAbi: LiquidityPoolPairContract.abi,
+        invocationType: BesuContractInvocationType.Call,
+        methodName: reserveMethod,
+        params: [],
+        signingCredential: this.ownerSigningCredential,
+        gas: 1_000_000,
+      }),
+      this.connector.invokeContract({
+        contractName: "LiquidityPoolPair",
+        contractAddress: pair.address,
+        contractAbi: LiquidityPoolPairContract.abi,
+        invocationType: BesuContractInvocationType.Call,
+        methodName: lockedMethod,
+        params: [],
+        signingCredential: this.ownerSigningCredential,
+        gas: 1_000_000,
+      }),
+    ]);
 
-    return { amountIn, amountOut, reserveIn, reserveOut, isInToken0 };
+    return (
+      BigInt(reserveRes.callOutput.toString()) -
+      BigInt(lockedRes.callOutput.toString())
+    );
+  }
+
+  private async readLockAmountOut(
+    pair: { address: string; token0: string },
+    lockId: string,
+  ): Promise<bigint> {
+    const res = await this.connector.invokeContract({
+      contractName: "LiquidityPoolPair",
+      contractAddress: pair.address,
+      contractAbi: LiquidityPoolPairContract.abi,
+      invocationType: BesuContractInvocationType.Call,
+      methodName: "locks",
+      params: [lockId],
+      signingCredential: this.ownerSigningCredential,
+      gas: 1_000_000,
+    });
+    // The public mapping getter returns the Lock struct fields; amountOut is the
+    // 5th field (state, to, tokenIn, amountIn, amountOut).
+    const out = res.callOutput as unknown;
+    let amountOut: unknown;
+    if (Array.isArray(out)) {
+      amountOut = out[4];
+    } else if (out && typeof out === "object") {
+      const rec = out as Record<string, unknown>;
+      amountOut = rec.amountOut ?? rec["4"];
+    }
+    return BigInt(String(amountOut));
   }
 
   public async tearDown(): Promise<void> {
