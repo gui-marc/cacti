@@ -83,6 +83,21 @@ async function balanceOf(
   return BigInt(res.callOutput.toString());
 }
 
+async function newTaker(): Promise<{
+  address: string;
+  cred: Web3SigningCredential;
+}> {
+  const taker = await env.ledger.createEthTestAccount();
+  return {
+    address: taker.address,
+    cred: {
+      ethAccount: taker.address,
+      secret: taker.privateKey,
+      type: Web3SigningCredentialTypeBesu.PrivateKeyHex,
+    },
+  };
+}
+
 describe("DummyBesuRFQEnvironment", () => {
   beforeAll(async () => {
     env = new DummyBesuRFQEnvironment({ logLevel });
@@ -112,9 +127,9 @@ describe("DummyBesuRFQEnvironment", () => {
     env.registerCurrency("USD", tokenA);
     env.registerCurrency("EUR", tokenB);
 
-    // MM (= owner) seeds liquidity for both directions.
-    await env.provideLiquidity("USD", 1_000_000, env.ownerSigningCredential);
-    await env.provideLiquidity("EUR", 1_000_000, env.ownerSigningCredential);
+    // MM (= owner) escrows liquidity for both directions.
+    await env.deposit("USD", 1_000_000, env.ownerSigningCredential);
+    await env.deposit("EUR", 1_000_000, env.ownerSigningCredential);
 
     // 1 USD = 0.9 EUR, 1 EUR = 1.1 USD (asymmetric).
     env.setRate("USD", "EUR", 9, 10);
@@ -137,137 +152,205 @@ describe("DummyBesuRFQEnvironment", () => {
     expect(env.getSettlementAddress()).toMatch(/^0x[0-9a-fA-F]{40}$/);
   });
 
+  it("credits available escrow on deposit", async () => {
+    expect(await env.getAvailableLiquidity("USD")).toBe(1_000_000n);
+    expect(await env.getAvailableLiquidity("EUR")).toBe(1_000_000n);
+  });
+
   it("rejects requestQuote when source currency is not registered", async () => {
     await expect(
-      env.requestQuote("JPY", "EUR", 100, env.ownerAccount),
+      env.requestQuote(uuidv4(), "JPY", "EUR", 100, env.ownerAccount),
     ).rejects.toThrow(/JPY/);
   });
 
   it("rejects requestQuote when destination currency is not registered", async () => {
     await expect(
-      env.requestQuote("USD", "JPY", 100, env.ownerAccount),
+      env.requestQuote(uuidv4(), "USD", "JPY", 100, env.ownerAccount),
     ).rejects.toThrow(/JPY/);
   });
 
   it("rejects requestQuote when no rate is set for the pair", async () => {
     env.registerCurrency("GBP", tokenA);
     await expect(
-      env.requestQuote("USD", "GBP", 100, env.ownerAccount),
+      env.requestQuote(uuidv4(), "USD", "GBP", 100, env.ownerAccount),
     ).rejects.toThrow(/No rate/);
   });
 
-  it("returns a quote with a rate matching num/den", async () => {
-    const taker = await env.ledger.createEthTestAccount();
-    const result = await env.requestQuote("USD", "EUR", 1_000, taker.address);
+  it("prices a quote with a rate matching num/den", async () => {
+    const taker = await newTaker();
+    const result = await env.requestQuote(
+      uuidv4(),
+      "USD",
+      "EUR",
+      1_000,
+      taker.address,
+    );
 
-    expect(result.fxQuote.id).toBe(result.quoteId);
     expect(result.fxQuote.baseCurrency).toBe("USD");
     expect(result.fxQuote.destinationCurrency).toBe("EUR");
     expect(result.fxQuote.rate).toBeCloseTo(0.9, 5);
     expect(result.quote.amountIn).toBe("1000");
     expect(result.quote.amountOut).toBe("900");
-
-    // Release so other tests don't see this quote in pending state.
-    await env.releaseQuote(result.quoteId);
-  });
-
-  it("rejects requestQuote when MM has insufficient liquidity", async () => {
-    const taker = await env.ledger.createEthTestAccount();
-    await expect(
-      env.requestQuote("USD", "EUR", 100_000_000, taker.address),
-    ).rejects.toThrow(/Insufficient/);
   });
 
   it(
-    "settles a valid quote, transferring tokens between MM and taker",
+    "rejects lock when the MM has insufficient escrow",
     async () => {
-      const taker = await env.ledger.createEthTestAccount();
-      const takerCred: Web3SigningCredential = {
-        ethAccount: taker.address,
-        secret: taker.privateKey,
-        type: Web3SigningCredentialTypeBesu.PrivateKeyHex,
-      };
+      const taker = await newTaker();
+      const { quote, signature } = await env.requestQuote(
+        uuidv4(),
+        "USD",
+        "EUR",
+        100_000_000,
+        taker.address,
+      );
+      await expect(env.lock(quote, signature, taker.cred)).rejects.toThrow();
+    },
+    TIMEOUT,
+  );
 
+  it(
+    "locks then settles, moving tokens between MM and taker",
+    async () => {
+      const taker = await newTaker();
       const amountIn = 1_000;
       const expectedAmountOut = 900n;
 
-      // Fund the taker with USD and a little ETH for gas.
       await mintTo(tokenA, taker.address, amountIn);
 
-      const mmUsdBefore = await balanceOf(tokenA, env.ownerAccount);
-      const mmEurBefore = await balanceOf(tokenB, env.ownerAccount);
+      const mmUsdBefore = await env.getAvailableLiquidity("USD");
+      const mmEurAvailBefore = await env.getAvailableLiquidity("EUR");
       const takerEurBefore = await balanceOf(tokenB, taker.address);
+      const takerUsdBefore = await balanceOf(tokenA, taker.address);
 
-      const result = await env.requestQuote(
+      const txId = uuidv4();
+      const { quote, signature } = await env.requestQuote(
+        txId,
         "USD",
         "EUR",
         amountIn,
         taker.address,
       );
 
-      const settled = await env.settleQuote(result.quoteId, takerCred);
+      await env.lock(quote, signature, taker.cred);
 
-      expect(settled.id).toBe(result.quoteId);
-      expect(settled.rate).toBeCloseTo(0.9, 5);
+      // Lock earmarks the output: available EUR drops, locked EUR rises.
+      expect(await env.getAvailableLiquidity("EUR")).toBe(
+        mmEurAvailBefore - expectedAmountOut,
+      );
+      expect(await env.getLockedLiquidity("EUR")).toBeGreaterThanOrEqual(
+        expectedAmountOut,
+      );
 
-      const mmUsdAfter = await balanceOf(tokenA, env.ownerAccount);
-      const mmEurAfter = await balanceOf(tokenB, env.ownerAccount);
+      await env.settle(txId, "USD", amountIn, taker.cred);
+
       const takerEurAfter = await balanceOf(tokenB, taker.address);
+      const takerUsdAfter = await balanceOf(tokenA, taker.address);
 
-      expect(mmUsdAfter - mmUsdBefore).toBe(BigInt(amountIn));
-      expect(mmEurBefore - mmEurAfter).toBe(expectedAmountOut);
+      // Taker paid amountIn USD and received the locked amountOut EUR.
       expect(takerEurAfter - takerEurBefore).toBe(expectedAmountOut);
+      expect(takerUsdBefore - takerUsdAfter).toBe(BigInt(amountIn));
+
+      // Escrow: tokenIn accrued to available USD, locked EUR released.
+      expect(await env.getAvailableLiquidity("USD")).toBe(
+        mmUsdBefore + BigInt(amountIn),
+      );
+      expect(await env.getLockedLiquidity("EUR")).toBe(0n);
     },
     TIMEOUT,
   );
 
   it(
-    "rejects settle on a tampered signature",
+    "settle is idempotent: a second settle no-ops",
     async () => {
-      const taker = await env.ledger.createEthTestAccount();
-      const takerCred: Web3SigningCredential = {
-        ethAccount: taker.address,
-        secret: taker.privateKey,
-        type: Web3SigningCredentialTypeBesu.PrivateKeyHex,
-      };
-      await mintTo(tokenA, taker.address, 1_000);
+      const taker = await newTaker();
+      const amountIn = 1_000;
+      await mintTo(tokenA, taker.address, amountIn);
 
-      const result = await env.requestQuote("USD", "EUR", 1_000, taker.address);
+      const txId = uuidv4();
+      const { quote, signature } = await env.requestQuote(
+        txId,
+        "USD",
+        "EUR",
+        amountIn,
+        taker.address,
+      );
+      await env.lock(quote, signature, taker.cred);
+      await env.settle(txId, "USD", amountIn, taker.cred);
 
-      // Mutate one byte of the signature in the pending entry.
-      const pending = (
-        env as unknown as {
-          pendingQuotes: Map<string, { signature: string }>;
-        }
-      ).pendingQuotes.get(result.quoteId)!;
-      const sig = pending.signature;
+      const takerEurAfterFirst = await balanceOf(tokenB, taker.address);
+
+      // Retrying settle must not pay out again.
+      await env.settle(txId, "USD", amountIn, taker.cred);
+      expect(await balanceOf(tokenB, taker.address)).toBe(takerEurAfterFirst);
+    },
+    TIMEOUT,
+  );
+
+  it(
+    "honours the locked rate even if the MM reprices before settle (slippage-free)",
+    async () => {
+      const taker = await newTaker();
+      const amountIn = 1_000;
+      const lockedAmountOut = 900n;
+      await mintTo(tokenA, taker.address, amountIn);
+
+      const takerEurBefore = await balanceOf(tokenB, taker.address);
+
+      const txId = uuidv4();
+      const { quote, signature } = await env.requestQuote(
+        txId,
+        "USD",
+        "EUR",
+        amountIn,
+        taker.address,
+      );
+      await env.lock(quote, signature, taker.cred);
+
+      // Market moves against the taker after the lock is held.
+      env.setRate("USD", "EUR", 5, 10);
+      try {
+        await env.settle(txId, "USD", amountIn, taker.cred);
+
+        // Taker still receives the rate locked at request time, not the new one.
+        expect((await balanceOf(tokenB, taker.address)) - takerEurBefore).toBe(
+          lockedAmountOut,
+        );
+      } finally {
+        env.setRate("USD", "EUR", 9, 10);
+      }
+    },
+    TIMEOUT,
+  );
+
+  it(
+    "rejects lock on a tampered signature",
+    async () => {
+      const taker = await newTaker();
+      const { quote, signature } = await env.requestQuote(
+        uuidv4(),
+        "USD",
+        "EUR",
+        1_000,
+        taker.address,
+      );
+
       const flipped =
-        sig.slice(0, 4) + (sig[4] === "0" ? "1" : "0") + sig.slice(5);
-      pending.signature = flipped;
+        signature.slice(0, 4) +
+        (signature[4] === "0" ? "1" : "0") +
+        signature.slice(5);
 
-      await expect(
-        env.settleQuote(result.quoteId, takerCred),
-      ).rejects.toThrow();
-
-      // Restore and clean up.
-      pending.signature = sig;
-      await env.releaseQuote(result.quoteId);
+      await expect(env.lock(quote, flipped, taker.cred)).rejects.toThrow();
     },
     TIMEOUT,
   );
 
   it(
-    "rejects settle after the quote expires",
+    "rejects lock on an expired quote",
     async () => {
-      const taker = await env.ledger.createEthTestAccount();
-      const takerCred: Web3SigningCredential = {
-        ethAccount: taker.address,
-        secret: taker.privateKey,
-        type: Web3SigningCredentialTypeBesu.PrivateKeyHex,
-      };
-      await mintTo(tokenA, taker.address, 1_000);
-
-      const result = await env.requestQuote(
+      const taker = await newTaker();
+      const { quote, signature } = await env.requestQuote(
+        uuidv4(),
         "USD",
         "EUR",
         1_000,
@@ -277,106 +360,89 @@ describe("DummyBesuRFQEnvironment", () => {
 
       await new Promise((r) => setTimeout(r, 2_500));
 
-      await expect(
-        env.settleQuote(result.quoteId, takerCred),
-      ).rejects.toThrow();
-
-      await env.releaseQuote(result.quoteId);
+      await expect(env.lock(quote, signature, taker.cred)).rejects.toThrow();
     },
     TIMEOUT,
   );
 
   it(
-    "rejects replayed settlement of the same quote",
+    "rejects a duplicate lock for the same id (replay)",
     async () => {
-      const taker = await env.ledger.createEthTestAccount();
-      const takerCred: Web3SigningCredential = {
-        ethAccount: taker.address,
-        secret: taker.privateKey,
-        type: Web3SigningCredentialTypeBesu.PrivateKeyHex,
-      };
-      await mintTo(tokenA, taker.address, 2_000);
+      const taker = await newTaker();
+      const amountIn = 1_000;
+      await mintTo(tokenA, taker.address, amountIn);
 
-      const result = await env.requestQuote("USD", "EUR", 1_000, taker.address);
-      await env.settleQuote(result.quoteId, takerCred);
+      const txId = uuidv4();
+      const { quote, signature } = await env.requestQuote(
+        txId,
+        "USD",
+        "EUR",
+        amountIn,
+        taker.address,
+      );
+      await env.lock(quote, signature, taker.cred);
 
-      // Re-insert the same quote into pending and try to settle again.
-      const pendingMap = (
-        env as unknown as {
-          pendingQuotes: Map<
-            string,
-            {
-              quote: unknown;
-              signature: string;
-              baseCurrency: string;
-              destinationCurrency: string;
-              amountInNumber: number;
-            }
-          >;
-        }
-      ).pendingQuotes;
-      pendingMap.set(result.quoteId, {
-        quote: result.quote,
-        signature: result.signature,
-        baseCurrency: "USD",
-        destinationCurrency: "EUR",
-        amountInNumber: 1_000,
-      });
+      await expect(env.lock(quote, signature, taker.cred)).rejects.toThrow();
 
-      await expect(
-        env.settleQuote(result.quoteId, takerCred),
-      ).rejects.toThrow();
-      pendingMap.delete(result.quoteId);
+      // Clean up the outstanding lock.
+      await env.release(txId, env.ownerSigningCredential);
     },
     TIMEOUT,
   );
 
   it(
-    "releaseQuote restores available liquidity and prevents settlement",
+    "release returns earmarked escrow and is idempotent",
     async () => {
-      const taker = await env.ledger.createEthTestAccount();
-      const takerCred: Web3SigningCredential = {
-        ethAccount: taker.address,
-        secret: taker.privateKey,
-        type: Web3SigningCredentialTypeBesu.PrivateKeyHex,
-      };
-      await mintTo(tokenA, taker.address, 1_000);
+      const taker = await newTaker();
+      const amountIn = 1_000;
+      const amountOut = 900n;
 
-      const liqBefore = env.getAvailableLiquidity("EUR");
+      const availBefore = await env.getAvailableLiquidity("EUR");
 
-      const result = await env.requestQuote("USD", "EUR", 1_000, taker.address);
-      expect(env.getAvailableLiquidity("EUR")).toBe(liqBefore - 900n);
+      const txId = uuidv4();
+      const { quote, signature } = await env.requestQuote(
+        txId,
+        "USD",
+        "EUR",
+        amountIn,
+        taker.address,
+      );
+      await env.lock(quote, signature, taker.cred);
+      expect(await env.getAvailableLiquidity("EUR")).toBe(
+        availBefore - amountOut,
+      );
 
-      await env.releaseQuote(result.quoteId);
-      expect(env.getAvailableLiquidity("EUR")).toBe(liqBefore);
+      await env.release(txId, env.ownerSigningCredential);
+      expect(await env.getAvailableLiquidity("EUR")).toBe(availBefore);
 
-      // Re-inject and confirm the on-chain invalidate blocks any settle attempt.
-      const pendingMap = (
-        env as unknown as {
-          pendingQuotes: Map<
-            string,
-            {
-              quote: unknown;
-              signature: string;
-              baseCurrency: string;
-              destinationCurrency: string;
-              amountInNumber: number;
-            }
-          >;
-        }
-      ).pendingQuotes;
-      pendingMap.set(result.quoteId, {
-        quote: result.quote,
-        signature: result.signature,
-        baseCurrency: "USD",
-        destinationCurrency: "EUR",
-        amountInNumber: 1_000,
-      });
+      // Releasing again is a safe no-op (idempotent).
+      await env.release(txId, env.ownerSigningCredential);
+      expect(await env.getAvailableLiquidity("EUR")).toBe(availBefore);
+    },
+    TIMEOUT,
+  );
+
+  it(
+    "rejects settle after a lock has been released",
+    async () => {
+      const taker = await newTaker();
+      const amountIn = 1_000;
+      await mintTo(tokenA, taker.address, amountIn);
+
+      const txId = uuidv4();
+      const { quote, signature } = await env.requestQuote(
+        txId,
+        "USD",
+        "EUR",
+        amountIn,
+        taker.address,
+      );
+      await env.lock(quote, signature, taker.cred);
+      await env.release(txId, env.ownerSigningCredential);
 
       await expect(
-        env.settleQuote(result.quoteId, takerCred),
+        env.settle(txId, "USD", amountIn, taker.cred),
       ).rejects.toThrow();
-      pendingMap.delete(result.quoteId);
     },
     TIMEOUT,
   );

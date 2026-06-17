@@ -12,11 +12,14 @@ export interface IBesuRFQFXProvisionStrategyOptions {
   takerAccount: string;
 }
 
+// Stateless RFQ strategy: the on-chain lock keyed by `keccak256(transactionId)`
+// is the single source of truth, so this class keeps no in-memory pending map.
+// Every method recomputes the lock from the transaction id alone, which makes
+// releaseLiquidity / confirmSettlement idempotent and crash-safe.
 export class BesuRFQFXProvisionStrategy extends FXProvisionStrategy {
   private readonly besuRFQ: DummyBesuRFQEnvironment;
   private readonly takerSigningCredential: Web3SigningCredential;
   private readonly takerAccount: string;
-  private readonly pending: Map<string, string> = new Map();
 
   constructor(options: IBesuRFQFXProvisionStrategyOptions) {
     super();
@@ -32,30 +35,38 @@ export class BesuRFQFXProvisionStrategy extends FXProvisionStrategy {
     amount: number,
     priceRange: DynamicRange,
   ): Promise<FXQuote> {
-    const result = await this.besuRFQ.requestQuote(
+    const { fxQuote, quote, signature } = await this.besuRFQ.requestQuote(
+      transactionId,
       baseCurrency,
       destinationCurrency,
       amount,
       this.takerAccount,
     );
 
-    const { fxQuote } = result;
+    // Translate the rate range into on-chain output bounds enforced atomically
+    // inside `lock()`. Non-finite / sentinel bounds collapse to "unbounded"
+    // (0 means no max; a negative lower bound clamps to 0).
+    const minAmountOut =
+      priceRange.min !== undefined && Number.isFinite(priceRange.min)
+        ? Math.max(0, Math.floor(amount * priceRange.min))
+        : 0;
+    const maxRaw = priceRange.max !== undefined ? amount * priceRange.max : 0;
+    const maxAmountOut =
+      Number.isFinite(maxRaw) && maxRaw > 0 && maxRaw < Number.MAX_SAFE_INTEGER
+        ? Math.floor(maxRaw)
+        : 0;
 
-    if (priceRange.min !== undefined && fxQuote.rate < priceRange.min) {
-      await this.besuRFQ.releaseQuote(result.quoteId);
+    try {
+      await this.besuRFQ.lock(quote, signature, this.takerSigningCredential, {
+        minAmountOut,
+        maxAmountOut,
+      });
+    } catch (error) {
       throw new Error(
         `No quotes available within the specified price range for ${baseCurrency}/${destinationCurrency}`,
+        { cause: error },
       );
     }
-
-    if (priceRange.max !== undefined && fxQuote.rate > priceRange.max) {
-      await this.besuRFQ.releaseQuote(result.quoteId);
-      throw new Error(
-        `No quotes available within the specified price range for ${baseCurrency}/${destinationCurrency}`,
-      );
-    }
-
-    this.pending.set(transactionId, result.quoteId);
 
     return fxQuote;
   }
@@ -69,27 +80,21 @@ export class BesuRFQFXProvisionStrategy extends FXProvisionStrategy {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _amount: number,
   ): Promise<void> {
-    const quoteId = this.pending.get(transactionId);
-    if (!quoteId) {
-      return;
-    }
-    await this.besuRFQ.releaseQuote(quoteId);
-    this.pending.delete(transactionId);
+    await this.besuRFQ.release(transactionId, this.takerSigningCredential);
   }
 
   async confirmSettlement(
     transactionId: string,
     baseCurrency: string,
-    destinationCurrency: string,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _destinationCurrency: string,
     amount: number,
   ): Promise<void> {
-    const quoteId = this.pending.get(transactionId);
-    if (!quoteId) {
-      throw new Error(
-        `No pending RFQ quote for tx=${transactionId} (${baseCurrency}->${destinationCurrency} amount=${amount})`,
-      );
-    }
-    await this.besuRFQ.settleQuote(quoteId, this.takerSigningCredential);
-    this.pending.delete(transactionId);
+    await this.besuRFQ.settle(
+      transactionId,
+      baseCurrency,
+      amount,
+      this.takerSigningCredential,
+    );
   }
 }

@@ -266,13 +266,13 @@ beforeAll(async () => {
     rfqEnv.registerCurrency(SOURCE_CHAIN_CODE, besuLiquidityToken);
     rfqEnv.registerCurrency(DESTINATION_CHAIN_CODE, ethereumLiquidityToken);
 
-    // MM seeds reserves on both sides for either-direction quoting.
-    await rfqEnv.provideLiquidity(
+    // MM escrows reserves on both sides for either-direction quoting.
+    await rfqEnv.deposit(
       SOURCE_CHAIN_CODE,
       500_000,
       rfqEnv.ownerSigningCredential,
     );
-    await rfqEnv.provideLiquidity(
+    await rfqEnv.deposit(
       DESTINATION_CHAIN_CODE,
       500_000,
       rfqEnv.ownerSigningCredential,

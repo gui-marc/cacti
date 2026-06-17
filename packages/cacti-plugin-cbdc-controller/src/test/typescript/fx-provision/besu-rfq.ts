@@ -14,7 +14,7 @@ import {
 } from "@hyperledger/cactus-plugin-ledger-connector-besu";
 import { PluginKeychainMemory } from "@hyperledger/cactus-plugin-keychain-memory";
 import { PluginRegistry } from "@hyperledger/cactus-core";
-import { randomBytes, randomUUID as uuidv4 } from "node:crypto";
+import { randomUUID as uuidv4 } from "node:crypto";
 import { signTypedData, SignTypedDataVersion } from "@metamask/eth-sig-util";
 import Web3 from "web3";
 
@@ -44,17 +44,8 @@ export interface RFQQuoteData {
 
 export interface RFQRequestQuoteResult {
   fxQuote: FXQuote;
-  quoteId: string;
   quote: RFQQuoteData;
   signature: string;
-}
-
-interface PendingQuote {
-  quote: RFQQuoteData;
-  signature: string;
-  baseCurrency: string;
-  destinationCurrency: string;
-  amountInNumber: number;
 }
 
 const DOMAIN_NAME = "CactiRFQSettlement";
@@ -78,8 +69,6 @@ export class DummyBesuRFQEnvironment {
 
   private currencies: Map<string, BesuTokenInfo> = new Map();
   private rates: Map<string, { num: bigint; den: bigint }> = new Map();
-  private availableLiquidity: Map<string, bigint> = new Map();
-  private pendingQuotes: Map<string, PendingQuote> = new Map();
 
   private dockerNetwork: string = "rfq-besu";
   private readonly logLevel: LogLevelDesc;
@@ -182,7 +171,10 @@ export class DummyBesuRFQEnvironment {
     this.rates.set(key, { num: BigInt(num), den: BigInt(den) });
   }
 
-  public async provideLiquidity(
+  // The MM supplies priceless inventory into the settlement contract's escrow:
+  // approve the contract, then `deposit` so the funds become available to back
+  // future quotes. Replaces the old approve-only "provideLiquidity".
+  public async deposit(
     currency: string,
     amount: number | bigint,
     signingCredential: Web3SigningCredential,
@@ -201,13 +193,29 @@ export class DummyBesuRFQEnvironment {
       gas: 1_000_000,
     });
 
-    const prev = this.availableLiquidity.get(token.address.toLowerCase()) ?? 0n;
-    this.availableLiquidity.set(token.address.toLowerCase(), prev + amountBig);
+    await this.connector.invokeContract({
+      contractName: this.settlementName,
+      contractAddress: this.settlementAddress,
+      contractAbi: RFQSettlementContract.abi,
+      invocationType: BesuContractInvocationType.Send,
+      methodName: "deposit",
+      params: [token.address, amountBig.toString()],
+      signingCredential,
+      gas: 1_000_000,
+    });
 
-    this.log.info(`MM provided ${amountBig} of ${currency} (${token.address})`);
+    this.log.info(
+      `MM deposited ${amountBig} of ${currency} (${token.address})`,
+    );
   }
 
+  // The MM prices `amount` of `from` into `to` at its current rate and signs an
+  // EIP-712 Quote (classic RFQ). Pure / off-chain: it neither mutates nor reads
+  // escrow beyond the informational available-liquidity figure. The quote id is
+  // derived deterministically from the caller-owned `transactionId` so the lock
+  // can be acted on later from that id alone.
   public async requestQuote(
+    transactionId: string,
     from: string,
     to: string,
     amount: number,
@@ -227,15 +235,7 @@ export class DummyBesuRFQEnvironment {
       throw new Error(`Computed amountOut is zero for ${amount} ${from}`);
     }
 
-    const tokenOutKey = tokenOut.address.toLowerCase();
-    const available = this.availableLiquidity.get(tokenOutKey) ?? 0n;
-    if (available < amountOut) {
-      throw new Error(
-        `Insufficient MM liquidity for ${to}: requested ${amountOut}, available ${available}`,
-      );
-    }
-
-    const quoteId = "0x" + randomBytes(32).toString("hex");
+    const quoteId = this.toLockId(transactionId);
     const expiry = BigInt(Math.floor(Date.now() / 1000) + expirySeconds);
 
     const quote: RFQQuoteData = {
@@ -250,67 +250,94 @@ export class DummyBesuRFQEnvironment {
 
     const signature = this.signQuote(quote);
 
-    this.availableLiquidity.set(tokenOutKey, available - amountOut);
-    this.pendingQuotes.set(quoteId, {
-      quote,
-      signature,
-      baseCurrency: from,
-      destinationCurrency: to,
-      amountInNumber: amount,
-    });
+    const available = await this.getAvailableLiquidity(to);
 
     const fxQuote: FXQuote = {
       id: quoteId,
       baseCurrency: from,
       destinationCurrency: to,
       rate: Number(amountOut) / amount,
-      availableLiquidity: Number(available - amountOut),
+      availableLiquidity: Number(available),
     };
 
     this.log.info(
-      `Issued RFQ quote ${quoteId} ${amount} ${from} -> ${amountOut} ${to} for taker ${taker}`,
+      `Priced RFQ quote ${quoteId} ${amount} ${from} -> ${amountOut} ${to} for taker ${taker}`,
     );
 
-    return { fxQuote, quoteId, quote, signature };
+    return { fxQuote, quote, signature };
   }
 
-  public async releaseQuote(quoteId: string): Promise<void> {
-    const pending = this.pendingQuotes.get(quoteId);
-    if (!pending) {
-      throw new Error(`No pending quote with id ${quoteId}`);
-    }
+  // Open the on-chain hold over a signed quote. Submitted by the taker; the
+  // contract verifies the MM signature, enforces the acceptance bounds, and
+  // earmarks the quote's amountOut from escrow. Reverts on a duplicate id, a
+  // bad/expired signature, out-of-range output, or insufficient liquidity.
+  public async lock(
+    quote: RFQQuoteData,
+    signature: string,
+    takerSigningCredential: Web3SigningCredential,
+    opts: { minAmountOut?: number; maxAmountOut?: number } = {},
+  ): Promise<void> {
+    await this.connector.invokeContract({
+      contractName: this.settlementName,
+      contractAddress: this.settlementAddress,
+      contractAbi: RFQSettlementContract.abi,
+      invocationType: BesuContractInvocationType.Send,
+      methodName: "lock",
+      params: [
+        [
+          quote.id,
+          quote.taker,
+          quote.tokenIn,
+          quote.tokenOut,
+          quote.amountIn,
+          quote.amountOut,
+          quote.expiry,
+        ],
+        signature,
+        (opts.minAmountOut ?? 0).toString(),
+        (opts.maxAmountOut ?? 0).toString(),
+      ],
+      signingCredential: takerSigningCredential,
+      gas: 9_000_000,
+    });
 
-    const tokenOut = this.requireCurrency(pending.destinationCurrency);
-    const tokenOutKey = tokenOut.address.toLowerCase();
-    const amountOut = BigInt(pending.quote.amountOut);
-    const current = this.availableLiquidity.get(tokenOutKey) ?? 0n;
-    this.availableLiquidity.set(tokenOutKey, current + amountOut);
+    this.log.info(`Locked quote ${quote.id} on-chain`);
+  }
+
+  // Return the earmarked output of a held quote to available escrow. Maps the
+  // caller-owned transaction id to the on-chain lock and is safe to retry: the
+  // contract no-ops on any non-active lock.
+  public async release(
+    transactionId: string,
+    signingCredential: Web3SigningCredential,
+  ): Promise<void> {
+    const lockId = this.toLockId(transactionId);
 
     await this.connector.invokeContract({
       contractName: this.settlementName,
       contractAddress: this.settlementAddress,
       contractAbi: RFQSettlementContract.abi,
       invocationType: BesuContractInvocationType.Send,
-      methodName: "invalidate",
-      params: [quoteId],
-      signingCredential: this.ownerSigningCredential,
+      methodName: "release",
+      params: [lockId],
+      signingCredential,
       gas: 1_000_000,
     });
 
-    this.pendingQuotes.delete(quoteId);
-    this.log.info(`Released quote ${quoteId} and invalidated on-chain`);
+    this.log.info(`Released lock for tx=${transactionId} (${lockId})`);
   }
 
-  public async settleQuote(
-    quoteId: string,
+  // Settle a held quote at the frozen rate: the taker approves the contract to
+  // pull `amount` of the input token, then `settle` consumes the lock. Safe to
+  // retry — the contract no-ops on an already-settled lock.
+  public async settle(
+    transactionId: string,
+    from: string,
+    amount: number,
     takerSigningCredential: Web3SigningCredential,
-  ): Promise<FXQuote> {
-    const pending = this.pendingQuotes.get(quoteId);
-    if (!pending) {
-      throw new Error(`No pending quote with id ${quoteId}`);
-    }
-
-    const tokenIn = this.requireCurrency(pending.baseCurrency);
+  ): Promise<void> {
+    const tokenIn = this.requireCurrency(from);
+    const lockId = this.toLockId(transactionId);
 
     await this.connector.invokeContract({
       contractName: tokenIn.contractName,
@@ -318,7 +345,7 @@ export class DummyBesuRFQEnvironment {
       contractAbi: tokenIn.abi,
       invocationType: BesuContractInvocationType.Send,
       methodName: "approve",
-      params: [this.settlementAddress, pending.quote.amountIn],
+      params: [this.settlementAddress, amount.toString()],
       signingCredential: takerSigningCredential,
       gas: 1_000_000,
     });
@@ -329,42 +356,12 @@ export class DummyBesuRFQEnvironment {
       contractAbi: RFQSettlementContract.abi,
       invocationType: BesuContractInvocationType.Send,
       methodName: "settle",
-      params: [
-        [
-          pending.quote.id,
-          pending.quote.taker,
-          pending.quote.tokenIn,
-          pending.quote.tokenOut,
-          pending.quote.amountIn,
-          pending.quote.amountOut,
-          pending.quote.expiry,
-        ],
-        pending.signature,
-      ],
+      params: [lockId],
       signingCredential: takerSigningCredential,
       gas: 9_000_000,
     });
 
-    this.pendingQuotes.delete(quoteId);
-
-    const amountOut = BigInt(pending.quote.amountOut);
-    this.log.info(
-      `Settled quote ${quoteId}: taker received ${amountOut} ${pending.destinationCurrency}`,
-    );
-
-    return {
-      id: quoteId,
-      baseCurrency: pending.baseCurrency,
-      destinationCurrency: pending.destinationCurrency,
-      rate: Number(amountOut) / pending.amountInNumber,
-      availableLiquidity: Number(
-        this.availableLiquidity.get(
-          this.requireCurrency(
-            pending.destinationCurrency,
-          ).address.toLowerCase(),
-        ) ?? 0n,
-      ),
-    };
+    this.log.info(`Settled lock for tx=${transactionId} (${lockId})`);
   }
 
   public async tearDown(): Promise<void> {
@@ -384,13 +381,77 @@ export class DummyBesuRFQEnvironment {
     return this.settlementAddress;
   }
 
-  public getPendingQuote(quoteId: string): RFQQuoteData | undefined {
-    return this.pendingQuotes.get(quoteId)?.quote;
+  // Reads the MM's currently available (unlocked) escrow for a currency.
+  public async getAvailableLiquidity(currency: string): Promise<bigint> {
+    return this.readBalanceMap("available", currency);
   }
 
-  public getAvailableLiquidity(currency: string): bigint {
+  // Reads the escrow currently earmarked by outstanding active locks.
+  public async getLockedLiquidity(currency: string): Promise<bigint> {
+    return this.readBalanceMap("locked", currency);
+  }
+
+  // Reads the on-chain lock state for a caller-owned transaction id. The public
+  // mapping getter returns the Lock struct fields in declaration order:
+  // (state, taker, tokenIn, tokenOut, amountIn, amountOut, expiry).
+  public async getLockState(transactionId: string): Promise<number> {
+    const lockId = this.toLockId(transactionId);
+    const res = await this.connector.invokeContract({
+      contractName: this.settlementName,
+      contractAddress: this.settlementAddress,
+      contractAbi: RFQSettlementContract.abi,
+      invocationType: BesuContractInvocationType.Call,
+      methodName: "locks",
+      params: [lockId],
+      signingCredential: this.ownerSigningCredential,
+      gas: 1_000_000,
+    });
+    const out = res.callOutput as unknown;
+    let state: unknown;
+    if (Array.isArray(out)) {
+      state = out[0];
+    } else if (out && typeof out === "object") {
+      const rec = out as Record<string, unknown>;
+      state = rec.state ?? rec["0"];
+    } else {
+      state = out;
+    }
+    return Number(state);
+  }
+
+  private async readBalanceMap(
+    methodName: "available" | "locked",
+    currency: string,
+  ): Promise<bigint> {
     const token = this.requireCurrency(currency);
-    return this.availableLiquidity.get(token.address.toLowerCase()) ?? 0n;
+    const res = await this.connector.invokeContract({
+      contractName: this.settlementName,
+      contractAddress: this.settlementAddress,
+      contractAbi: RFQSettlementContract.abi,
+      invocationType: BesuContractInvocationType.Call,
+      methodName,
+      params: [token.address],
+      signingCredential: this.ownerSigningCredential,
+      gas: 1_000_000,
+    });
+    return BigInt(res.callOutput.toString());
+  }
+
+  // Derives the bytes32 on-chain lock key from a caller-owned transaction id.
+  // The MM signs this same id into the quote, and release/settle recompute it,
+  // so the lock can be acted on from the transaction id alone with no off-chain
+  // state. Any deterministic hash works since the contract treats it as opaque.
+  private toLockId(transactionId: string): string {
+    const id = this.web3.utils.soliditySha3({
+      type: "string",
+      value: transactionId,
+    });
+    if (!id) {
+      throw new Error(
+        `Failed to derive lock id from transaction id ${transactionId}`,
+      );
+    }
+    return id;
   }
 
   private signQuote(quote: RFQQuoteData): string {

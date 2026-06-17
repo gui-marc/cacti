@@ -86,6 +86,9 @@ export enum TransactionStatus {
   COMPLIANCE_CHECKS,
   MARKED_FOR_REVIEW,
   EXECUTING,
+  // The off-ledger transfer succeeded but settling the FX leg has not yet been
+  // confirmed after bounded retries; a reconciler must re-drive settle(id).
+  SETTLEMENT_PENDING,
   COMPLETED,
   FAILED,
   EXPIRED,

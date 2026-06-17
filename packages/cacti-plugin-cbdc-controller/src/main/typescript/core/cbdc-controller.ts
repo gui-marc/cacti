@@ -226,24 +226,55 @@ export default class CBDCController {
       });
     }
 
-    try {
-      await this.fxProvisionStrategy.confirmSettlement(
-        transaction.id,
-        transaction.sourceChainCode,
-        transaction.destinationChainCode,
-        transaction.amount,
-      );
-    } catch (error) {
-      this.log.error(
-        `Error confirming settlement with FX provider for transaction ${transaction.id}`,
-        error,
-      );
-    }
+    // The off-ledger transfer above has already moved the funds, so the FX
+    // settlement is obligatory: it must be driven to success, never unwound.
+    // confirmSettlement is idempotent (the on-chain settle no-ops once settled),
+    // so retrying is safe. If it still fails after bounded retries, persist the
+    // transaction as SETTLEMENT_PENDING for a reconciler to re-drive settle —
+    // do NOT mark it COMPLETED, which would falsely claim the FX leg settled.
+    const settled = await this.confirmSettlementWithRetry(transaction);
 
     await this.store.update(transaction.id, {
       ...transaction,
-      status: TransactionStatus.COMPLETED,
+      status: settled
+        ? TransactionStatus.COMPLETED
+        : TransactionStatus.SETTLEMENT_PENDING,
     });
+  }
+
+  private async confirmSettlementWithRetry(
+    transaction: ITransaction,
+  ): Promise<boolean> {
+    const maxAttempts = 5;
+    let backoffMs = 500;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        await this.fxProvisionStrategy.confirmSettlement(
+          transaction.id,
+          transaction.sourceChainCode,
+          transaction.destinationChainCode,
+          transaction.amount,
+        );
+        return true;
+      } catch (error) {
+        this.log.error(
+          `Error confirming settlement for transaction ${transaction.id} ` +
+            `(attempt ${attempt}/${maxAttempts})`,
+          error,
+        );
+        if (attempt < maxAttempts) {
+          await new Promise((resolve) => setTimeout(resolve, backoffMs));
+          backoffMs *= 2;
+        }
+      }
+    }
+
+    this.log.error(
+      `Settlement still failing for transaction ${transaction.id} after ` +
+        `${maxAttempts} attempts; marking SETTLEMENT_PENDING for reconciliation`,
+    );
+    return false;
   }
 
   private async requestTransactionFXRate(

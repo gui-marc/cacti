@@ -26,6 +26,13 @@ const USD = "USD";
 const EUR = "EUR";
 const ITERATIONS = Number(process.env.BENCH_ITERATIONS ?? 10);
 const WARMUP = Number(process.env.BENCH_WARMUP ?? 1);
+const VALUE = Number(process.env.BENCH_VALUE ?? 100);
+
+const HEADROOM = Number(process.env.BENCH_LIQUIDITY_HEADROOM ?? 10);
+const totalDemand = VALUE * ITERATIONS;
+const USD_LIQUIDITY = Math.max(500_000, totalDemand * HEADROOM);
+const EUR_LIQUIDITY = Math.round(USD_LIQUIDITY * 0.8); // 5:4 rate
+const MINT_AMOUNT = Math.max(10_000_000, USD_LIQUIDITY * 2);
 
 const logLevel: LogLevelDesc = "DEBUG";
 
@@ -73,6 +80,10 @@ async function mintAmmToken(
 }
 
 async function run() {
+  console.log(
+    `Running Besu AMM FX benchmark with ${ITERATIONS} iterations (after ${WARMUP} warmup) and value ${VALUE}...`,
+  );
+
   ammEnv = new DummyBesuAMMEnvironment({ logLevel: "DEBUG" });
   await ammEnv.init();
   await ammEnv.deployAndSetupContracts();
@@ -101,8 +112,8 @@ async function run() {
   const usdLiquidtyToken = await deployAmmToken("USDLiquidityToken");
   const eurLiquidtyToken = await deployAmmToken("EURLiquidityToken");
 
-  await mintAmmToken(usdLiquidtyToken, ammEnv.ownerAccount, 10_000_000);
-  await mintAmmToken(eurLiquidtyToken, ammEnv.ownerAccount, 10_000_000);
+  await mintAmmToken(usdLiquidtyToken, ammEnv.ownerAccount, MINT_AMOUNT);
+  await mintAmmToken(eurLiquidtyToken, ammEnv.ownerAccount, MINT_AMOUNT);
 
   ammEnv.registerCurrency(USD, usdLiquidtyToken);
   ammEnv.registerCurrency(EUR, eurLiquidtyToken);
@@ -110,18 +121,18 @@ async function run() {
   await ammEnv.provideLiquidity(
     USD,
     EUR,
-    500_000,
-    400_000,
+    USD_LIQUIDITY,
+    EUR_LIQUIDITY,
     ammEnv.ownerSigningCredential,
   );
 
   console.log(`Warming up for ${WARMUP} iterations...`);
   for (let i = 0; i < WARMUP; i++) {
     const txId = randomUUID();
-    await strategy.requestFXQuote(txId, USD, EUR, 100, {
+    await strategy.requestFXQuote(txId, USD, EUR, VALUE, {
       min: 0,
     });
-    await strategy.releaseLiquidity(txId, USD, EUR, 100);
+    await strategy.releaseLiquidity(txId, USD, EUR, VALUE);
   }
 
   console.log(`Running benchmark for ${ITERATIONS} iterations...`);
@@ -130,23 +141,23 @@ async function run() {
     // releaseLiquidity are measured against one lock...
     const releaseTxId = randomUUID();
     const { ms: requestFXQuoteMs } = await timed(() =>
-      strategy.requestFXQuote(releaseTxId, USD, EUR, 100, {
+      strategy.requestFXQuote(releaseTxId, USD, EUR, VALUE, {
         min: 0,
       }),
     );
     requestFXQuoteTimings.push(requestFXQuoteMs);
 
     const { ms: releaseLiquidityMs } = await timed(() =>
-      strategy.releaseLiquidity(releaseTxId, USD, EUR, 100),
+      strategy.releaseLiquidity(releaseTxId, USD, EUR, VALUE),
     );
     releaseLiquidityTimings.push(releaseLiquidityMs);
 
     // ...and confirmSettlement against a fresh lock, since settling requires an
     // active (un-released) lock.
     const settleTxId = randomUUID();
-    await strategy.requestFXQuote(settleTxId, USD, EUR, 100, { min: 0 });
+    await strategy.requestFXQuote(settleTxId, USD, EUR, VALUE, { min: 0 });
     const { ms: confirmSettlementMs } = await timed(() =>
-      strategy.confirmSettlement(settleTxId, USD, EUR, 100),
+      strategy.confirmSettlement(settleTxId, USD, EUR, VALUE),
     );
     confirmSettlementTimings.push(confirmSettlementMs);
   }
