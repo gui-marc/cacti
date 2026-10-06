@@ -1,6 +1,7 @@
 import express, { Request, Response, NextFunction } from "express";
 import cookieParser from "cookie-parser";
 import cors from "cors";
+import axios from "axios";
 import http from "node:http";
 import bcrypt from "bcryptjs";
 import { randomUUID } from "node:crypto";
@@ -76,6 +77,28 @@ export async function startPartner(deps: PartnerAppDeps): Promise<StartedPartner
     });
   }
   const compliance = new ComplianceService(config.partnerId, callerLookup);
+
+  // The receiver's bank has no other way to learn about a transaction, so when
+  // the receiver is not one of our customers we tell the other partners.
+  const notifyPeers = async (record: IPartnerTransactionRecord) => {
+    if (
+      customers.getByLedgerAccount(
+        record.destinationChainCode,
+        record.receiverAddress,
+      )
+    ) {
+      return;
+    }
+    await Promise.all(
+      (config.peerUrls ?? []).map((url) =>
+        axios
+          .post(`${url}/transactions/incoming`, toTxDto(record), {
+            timeout: 5000,
+          })
+          .catch((e) => log.warn(`Failed to notify peer ${url}`, e)),
+      ),
+    );
+  };
 
   const app = express();
   app.use(express.json({ limit: "1mb" }));
@@ -157,7 +180,11 @@ export async function startPartner(deps: PartnerAppDeps): Promise<StartedPartner
 
   app.get("/transactions", requireAuth, (req, res) => {
     const customer = (req as Request & { customer: ICustomer }).customer;
-    res.json(partnerTxs.listForCustomer(customer.id).map(toTxDto));
+    res.json(
+      partnerTxs
+        .listForCustomer(customer.id, customer.ledgerAccounts)
+        .map(toTxDto),
+    );
   });
 
   app.post("/transactions", requireAuth, async (req, res) => {
@@ -207,14 +234,68 @@ export async function startPartner(deps: PartnerAppDeps): Promise<StartedPartner
       customerId: customer.id,
       sourceChainCode: sourceChain,
       destinationChainCode: destinationChain,
+      senderAddress,
       receiverAddress,
       amount: Number(amount),
+      destinationAmount: controllerResult.destinationAmount ?? Number(amount),
       status: controllerResult.status ?? "SUBMITTED",
       createdAt: new Date(),
       updatedAt: new Date(),
     };
     partnerTxs.create(record);
+    await notifyPeers(record);
     return res.status(201).json(toTxDto(record));
+  });
+
+  // Called by a peer partner (see notifyPeers). Unauthenticated: prototype only.
+  app.post("/transactions/incoming", (req, res) => {
+    const {
+      controllerTransactionId,
+      sourceChain,
+      destinationChain,
+      senderAddress,
+      receiverAddress,
+      amount,
+      destinationAmount,
+      status,
+    } = req.body ?? {};
+    if (
+      !controllerTransactionId ||
+      !sourceChain ||
+      !destinationChain ||
+      !receiverAddress ||
+      !amount ||
+      !status
+    ) {
+      return res.status(400).json({ error: "missing required fields" });
+    }
+    const existing = partnerTxs.getByControllerTransactionId(
+      controllerTransactionId,
+    );
+    if (existing) {
+      partnerTxs.updateStatus(existing.id, status);
+      return res.status(204).end();
+    }
+    const receiver = customers.getByLedgerAccount(
+      destinationChain,
+      receiverAddress,
+    );
+    if (!receiver) return res.status(204).end();
+    partnerTxs.create({
+      id: randomUUID(),
+      controllerTransactionId,
+      customerId: receiver.id,
+      sourceChainCode: sourceChain,
+      destinationChainCode: destinationChain,
+      senderAddress: senderAddress ?? "",
+      receiverAddress,
+      amount: Number(amount),
+      destinationAmount: Number(destinationAmount ?? amount),
+      status,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    return res.status(201).end();
   });
 
   app.post("/transactions/:id/accept", requireAuth, async (req, res) => {
@@ -238,6 +319,7 @@ export async function startPartner(deps: PartnerAppDeps): Promise<StartedPartner
       return res.status(502).json({ error: "accept failed" });
     }
     const refreshed = partnerTxs.get(record.id)!;
+    await notifyPeers(refreshed);
     return res.json(toTxDto(refreshed));
   });
 
@@ -293,8 +375,10 @@ function toTxDto(record: IPartnerTransactionRecord) {
     controllerTransactionId: record.controllerTransactionId,
     sourceChain: record.sourceChainCode,
     destinationChain: record.destinationChainCode,
+    senderAddress: record.senderAddress,
     receiverAddress: record.receiverAddress,
     amount: record.amount,
+    destinationAmount: record.destinationAmount,
     status: record.status,
     createdAt: record.createdAt.toISOString(),
     updatedAt: record.updatedAt.toISOString(),

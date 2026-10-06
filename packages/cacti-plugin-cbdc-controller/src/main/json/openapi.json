@@ -86,6 +86,10 @@
             "type": "string",
             "description": "Unique identifier of the created transaction."
           },
+          "destinationAmount": {
+            "type": "number",
+            "description": "Amount credited on the destination chain after applying the FX rate."
+          },
           "status": {
             "type": "string",
             "description": "Optional status indicator. Present when the transaction requires manual review.",

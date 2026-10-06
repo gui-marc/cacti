@@ -37,6 +37,21 @@ export default function AccountPage() {
 
   const currentAccount = accountType === "besu" ? besuBalance : ethereumBalance
 
+  // Only the legs that touch the selected chain's account: a cross-chain
+  // transfer is a debit on the source account and a credit on the destination.
+  const account = currentAccount?.account?.toLowerCase()
+  const accountTransactions = (transactions ?? []).flatMap((transaction) => {
+    const isSent =
+      transaction.sourceChain === accountType &&
+      transaction.senderAddress.toLowerCase() === account
+    const isReceived =
+      transaction.destinationChain === accountType &&
+      transaction.receiverAddress.toLowerCase() === account
+
+    if (!isSent && !isReceived) return []
+    return [{ transaction, isReceived: !isSent }]
+  })
+
   return (
     <Protected>
       <Navbar />
@@ -86,24 +101,38 @@ export default function AccountPage() {
             </p>
           </div>
 
-          {transactions?.length === 0 && <TransactionsEmpty />}
+          {accountTransactions.length === 0 && <TransactionsEmpty />}
 
           <Table>
             <TableBody>
-              {transactions?.map((transaction) => {
-                const isReceived =
-                  transaction.receiverAddress === currentAccount?.account
-
+              {accountTransactions.map(({ transaction, isReceived }) => {
                 return (
                   <TableRow key={transaction.id}>
                     <TableCell>
-                      <EmptyMedia variant="icon">
+                      <EmptyMedia
+                        variant="icon"
+                        className={
+                          isReceived
+                            ? "bg-green-500/10 text-green-600 dark:text-green-400"
+                            : "bg-red-500/10 text-red-600 dark:text-red-400"
+                        }
+                      >
                         {isReceived ? (
                           <BanknoteArrowDown />
                         ) : (
                           <BanknoteArrowUp />
                         )}
                       </EmptyMedia>
+                    </TableCell>
+                    <TableCell>
+                      <p className="font-mono font-medium">
+                        {isReceived ? "+" : "-"}
+                        {(isReceived
+                          ? transaction.destinationAmount
+                          : transaction.amount
+                        ).toFixed(2)}
+                      </p>
+                      <p className="text-sm text-muted-foreground">Amount</p>
                     </TableCell>
                     <TableCell>
                       <p className="font-medium">{transaction.status}</p>
@@ -116,20 +145,23 @@ export default function AccountPage() {
                       <p className="text-sm text-muted-foreground">Source</p>
                     </TableCell>
                     <TableCell>
-                      <p className="font-medium">
-                        <ChainBadge chain={transaction.destinationChain} />{" "}
-                        {transaction.receiverAddress.slice(0, 6)}...
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        Destination
-                      </p>
+                      {!isReceived && (
+                        <>
+                          <p className="font-medium">
+                            <ChainBadge chain={transaction.destinationChain} />{" "}
+                            {transaction.receiverAddress.slice(0, 6)}...
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            Destination
+                          </p>
+                        </>
+                      )}
                     </TableCell>
                     <TableCell>
-                      <p className="font-mono font-medium">
-                        {isReceived ? "+" : "-"}
-                        {transaction.amount.toFixed(2)}
+                      <p className="font-medium">
+                        {formatTimestamp(transaction.createdAt)}
                       </p>
-                      <p className="text-sm text-muted-foreground">Amount</p>
+                      <p className="text-sm text-muted-foreground">Date</p>
                     </TableCell>
                   </TableRow>
                 )
@@ -140,6 +172,13 @@ export default function AccountPage() {
       </div>
     </Protected>
   )
+}
+
+function formatTimestamp(timestamp: string) {
+  return new Date(timestamp).toLocaleString(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  })
 }
 
 function TransactionsEmpty() {

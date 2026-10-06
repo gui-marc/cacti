@@ -173,7 +173,11 @@ describe("Endpoint envelope verification (requireClientAuth=true)", () => {
   it("accepts a valid envelope, tags the transaction with the verified partnerId, and signs the response", async () => {
     const initiate = jest
       .fn<CBDCController["initiateTransaction"]>()
-      .mockResolvedValue({ kind: "completed", transactionId: "tx-1" });
+      .mockResolvedValue({
+        kind: "completed",
+        transactionId: "tx-1",
+        destinationAmount: 150,
+      });
     const { endpoint, securityService } = await buildInitiateEndpoint({
       initiateTransaction: initiate,
     });

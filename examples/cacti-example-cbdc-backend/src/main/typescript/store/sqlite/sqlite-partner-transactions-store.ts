@@ -7,8 +7,10 @@ interface Row {
   customer_id: string;
   source_chain: string;
   dest_chain: string;
+  sender_address: string;
   receiver_address: string;
   amount: number;
+  dest_amount: number | null;
   status: string;
   created_at: number;
   updated_at: number;
@@ -24,8 +26,10 @@ export class SqlitePartnerTransactionsStore {
       customerId: row.customer_id,
       sourceChainCode: row.source_chain as ChainCode,
       destinationChainCode: row.dest_chain as ChainCode,
+      senderAddress: row.sender_address,
       receiverAddress: row.receiver_address,
       amount: row.amount,
+      destinationAmount: row.dest_amount ?? row.amount,
       status: row.status,
       createdAt: new Date(row.created_at),
       updatedAt: new Date(row.updated_at),
@@ -36,8 +40,8 @@ export class SqlitePartnerTransactionsStore {
     this.db
       .prepare(
         `INSERT INTO partner_transactions
-         (id, controller_tx_id, customer_id, source_chain, dest_chain, receiver_address, amount, status, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, controller_tx_id, customer_id, source_chain, dest_chain, sender_address, receiver_address, amount, dest_amount, status, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         record.id,
@@ -45,8 +49,10 @@ export class SqlitePartnerTransactionsStore {
         record.customerId,
         record.sourceChainCode,
         record.destinationChainCode,
+        record.senderAddress,
         record.receiverAddress,
         record.amount,
+        record.destinationAmount,
         record.status,
         record.createdAt.getTime(),
         record.updatedAt.getTime(),
@@ -61,13 +67,34 @@ export class SqlitePartnerTransactionsStore {
       .run(status, Date.now(), id);
   }
 
-  listForCustomer(customerId: string): IPartnerTransactionRecord[] {
+  /** Transactions the customer sent, plus those received on their accounts. */
+  listForCustomer(
+    customerId: string,
+    ledgerAccounts: Record<ChainCode, string>,
+  ): IPartnerTransactionRecord[] {
     const rows = this.db
       .prepare(
-        `SELECT * FROM partner_transactions WHERE customer_id = ? ORDER BY created_at DESC`,
+        `SELECT * FROM partner_transactions
+         WHERE customer_id = ?
+            OR (dest_chain = 'besu' AND lower(receiver_address) = lower(?))
+            OR (dest_chain = 'ethereum' AND lower(receiver_address) = lower(?))
+         ORDER BY created_at DESC`,
       )
-      .all(customerId) as Row[];
+      .all(
+        customerId,
+        ledgerAccounts.besu ?? "",
+        ledgerAccounts.ethereum ?? "",
+      ) as Row[];
     return rows.map((r) => this.rowToRecord(r));
+  }
+
+  getByControllerTransactionId(
+    controllerTransactionId: string,
+  ): IPartnerTransactionRecord | null {
+    const row = this.db
+      .prepare(`SELECT * FROM partner_transactions WHERE controller_tx_id = ?`)
+      .get(controllerTransactionId) as Row | undefined;
+    return row ? this.rowToRecord(row) : null;
   }
 
   get(id: string): IPartnerTransactionRecord | null {

@@ -202,6 +202,18 @@ export interface PartnerTransaction {
      */
     'amount': number;
     /**
+     * Amount credited on the destination chain after FX conversion.
+     * @type {number}
+     * @memberof PartnerTransaction
+     */
+    'destinationAmount': number;
+    /**
+     * 
+     * @type {string}
+     * @memberof PartnerTransaction
+     */
+    'senderAddress': string;
+    /**
      * 
      * @type {string}
      * @memberof PartnerTransaction

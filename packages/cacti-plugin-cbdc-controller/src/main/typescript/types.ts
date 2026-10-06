@@ -47,8 +47,12 @@ export interface IInitiateTransactionCommand extends IInitiateTransactionRequest
 }
 
 export type InitiateTransactionResult =
-  | { kind: "completed"; transactionId: string }
-  | { kind: "marked_for_review"; transactionId: string };
+  | { kind: "completed"; transactionId: string; destinationAmount: number }
+  | {
+      kind: "marked_for_review";
+      transactionId: string;
+      destinationAmount: number;
+    };
 
 export interface IAcceptTransactionRequest {
   transactionId: string;

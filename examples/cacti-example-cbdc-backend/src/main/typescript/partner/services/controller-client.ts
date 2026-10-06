@@ -20,6 +20,7 @@ export interface InitiateTxPayload {
 
 export interface InitiateTxResponse {
   transactionId: string;
+  destinationAmount?: number;
   status?: string;
 }
 

@@ -29,7 +29,7 @@ import {
   TokenType,
 } from "@hyperledger/cactus-plugin-satp-hermes";
 import { LedgerType } from "@hyperledger/cactus-core-api";
-import { OntologyManager } from "@hyperledger/cactus-plugin-satp-hermes/src/main/typescript/cross-chain-mechanisms/bridge/ontology/ontology-manager";
+import { OntologyManager } from "@hyperledger/cactus-plugin-satp-hermes/dist/lib/main/typescript/cross-chain-mechanisms/bridge/ontology/ontology-manager";
 import ExampleOntologyERC20 from "../../json/ontologies/ontology-satp-erc20-interact-besu.json";
 import ExampleOntologyERC721 from "../../json/ontologies/ontology-satp-erc721-interact-besu.json";
 import {
@@ -37,7 +37,7 @@ import {
   INetworkOptions,
 } from "@hyperledger/cactus-plugin-satp-hermes";
 import Docker from "dockerode";
-import { BesuGasConfig } from "@hyperledger/cactus-plugin-satp-hermes/src/main/typescript/services/validation/config-validating-functions/bridges-config-validating-functions/validate-besu-config";
+import { BesuGasConfig } from "@hyperledger/cactus-plugin-satp-hermes/dist/lib/main/typescript/services/validation/config-validating-functions/bridges-config-validating-functions/validate-besu-config";
 import { IBesuLeafOptions } from "@hyperledger/cactus-plugin-satp-hermes/dist/lib/main/typescript/cross-chain-mechanisms/bridge/bridge-types";
 export interface IBesuTestEnvironment {
   logLevel: LogLevelDesc;

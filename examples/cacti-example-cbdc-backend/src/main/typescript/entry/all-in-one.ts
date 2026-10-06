@@ -351,6 +351,7 @@ async function main() {
     instanceId: "partner-a",
     httpPort: PARTNER_A_PORT,
     publicBaseUrl: `http://localhost:${PARTNER_A_PORT}`,
+    peerUrls: [`http://localhost:${PARTNER_B_PORT}`],
     centralBanks: [
       { chainCode: "besu", baseUrl: `http://localhost:${CB_PORT}`, apiKey: partnerASecret },
       { chainCode: "ethereum", baseUrl: `http://localhost:${CB_PORT}`, apiKey: partnerASecret },
@@ -369,6 +370,7 @@ async function main() {
     instanceId: "partner-b",
     httpPort: PARTNER_B_PORT,
     publicBaseUrl: `http://localhost:${PARTNER_B_PORT}`,
+    peerUrls: [`http://localhost:${PARTNER_A_PORT}`],
     centralBanks: [
       { chainCode: "besu", baseUrl: `http://localhost:${CB_PORT}`, apiKey: partnerBSecret },
       { chainCode: "ethereum", baseUrl: `http://localhost:${CB_PORT}`, apiKey: partnerBSecret },

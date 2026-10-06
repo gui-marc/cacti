@@ -20,8 +20,11 @@ export interface IPartnerTransactionRecord {
   customerId: string;
   sourceChainCode: ChainCode;
   destinationChainCode: ChainCode;
+  senderAddress: string;
   receiverAddress: string;
   amount: number;
+  /** Amount credited on the destination chain, after FX conversion. */
+  destinationAmount: number;
   status: string;
   createdAt: Date;
   updatedAt: Date;

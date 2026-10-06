@@ -126,12 +126,28 @@ export default class CBDCController {
         status: TransactionStatus.MARKED_FOR_REVIEW,
       });
       this.scheduleExpiry(transactionID, persisted.timeToExpire);
-      return { kind: "marked_for_review", transactionId: transactionID };
+      return {
+        kind: "marked_for_review",
+        transactionId: transactionID,
+        destinationAmount: this.destinationAmount(persisted),
+      };
     }
 
     await this.executeTransfer(persisted);
 
-    return { kind: "completed", transactionId: transactionID };
+    return {
+      kind: "completed",
+      transactionId: transactionID,
+      destinationAmount: this.destinationAmount(persisted),
+    };
+  }
+
+  /** Amount credited on the destination chain once the FX rate is applied. */
+  private destinationAmount(transaction: ITransaction): number {
+    if (!transaction.fxRate) {
+      throw new Error(`FX rate not set for transaction ${transaction.id}`);
+    }
+    return Math.floor(transaction.amount * transaction.fxRate);
   }
 
   public async acceptTransaction(
@@ -466,15 +482,11 @@ export default class CBDCController {
 
     this.log.debug("Getting assets from environments...");
 
-    if (!transaction.fxRate) {
-      throw new Error(`FX rate not set for transaction ${transactionId}`);
-    }
-
     const [sourceAsset, receiverAsset] = await Promise.all([
       sourceEnvironment.getAsset(senderAddress, amount),
       destinationEnvironment.getAsset(
         receiverAddress,
-        Math.floor(amount * transaction.fxRate!),
+        this.destinationAmount(transaction),
       ),
     ]);
 

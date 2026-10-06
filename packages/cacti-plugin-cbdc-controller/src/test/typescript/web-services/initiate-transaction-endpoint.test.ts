@@ -70,6 +70,7 @@ describe("InitiateTransactionEndpointV1", () => {
     const { endpoint } = buildEndpoint({
       kind: "completed",
       transactionId: "tx-1",
+      destinationAmount: 150,
     });
     expect(endpoint.getVerbLowerCase()).toBe("post");
     expect(endpoint.getPath()).toBe("/initiate-transaction");
@@ -79,6 +80,7 @@ describe("InitiateTransactionEndpointV1", () => {
     const { endpoint } = buildEndpoint({
       kind: "completed",
       transactionId: "tx-1",
+      destinationAmount: 150,
     });
     const authz = await endpoint.getAuthorizationOptionsProvider().get();
     expect(authz).toEqual({ isProtected: true, requiredRoles: ["admin"] });
@@ -112,6 +114,7 @@ describe("InitiateTransactionEndpointV1", () => {
     const { endpoint, initiateTransaction } = buildEndpoint({
       kind: "completed",
       transactionId: "tx-200",
+      destinationAmount: 150,
     });
     const body = buildRequest();
     const req = { body, method: "POST", path: "/" } as Request;
@@ -124,13 +127,17 @@ describe("InitiateTransactionEndpointV1", () => {
       initiatorId: "test-controller",
     });
     expect(res.status).toHaveBeenCalledWith(200);
-    expect(res.json).toHaveBeenCalledWith({ transactionId: "tx-200" });
+    expect(res.json).toHaveBeenCalledWith({
+      transactionId: "tx-200",
+      destinationAmount: 150,
+    });
   });
 
   it("returns 202 with MARKED_FOR_REVIEW when the controller flags the transaction for review", async () => {
     const { endpoint } = buildEndpoint({
       kind: "marked_for_review",
       transactionId: "tx-202",
+      destinationAmount: 150,
     });
     const req = {
       body: buildRequest(),
@@ -144,6 +151,7 @@ describe("InitiateTransactionEndpointV1", () => {
     expect(res.status).toHaveBeenCalledWith(202);
     expect(res.json).toHaveBeenCalledWith({
       transactionId: "tx-202",
+      destinationAmount: 150,
       status: "MARKED_FOR_REVIEW",
     });
   });

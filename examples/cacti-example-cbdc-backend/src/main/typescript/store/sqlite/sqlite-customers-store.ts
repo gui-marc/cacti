@@ -47,6 +47,16 @@ export class SqliteCustomersStore {
     return row ? this.rowToCustomer(row) : null;
   }
 
+  getByLedgerAccount(chain: ChainCode, account: string): ICustomer | null {
+    const row = this.db
+      .prepare(
+        `SELECT * FROM customers
+         WHERE lower(json_extract(ledger_accounts, '$.' || ?)) = lower(?)`,
+      )
+      .get(chain, account) as Row | undefined;
+    return row ? this.rowToCustomer(row) : null;
+  }
+
   getByTaxId(taxId: string): ICustomer | null {
     const row = this.db
       .prepare(`SELECT * FROM customers WHERE tax_id = ?`)

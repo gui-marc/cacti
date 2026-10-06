@@ -260,8 +260,10 @@
           "controllerTransactionId",
           "sourceChain",
           "destinationChain",
+          "senderAddress",
           "receiverAddress",
           "amount",
+          "destinationAmount",
           "status",
           "createdAt",
           "updatedAt"
@@ -271,8 +273,13 @@
           "controllerTransactionId": { "type": "string" },
           "sourceChain": { "$ref": "#/components/schemas/ChainCode" },
           "destinationChain": { "$ref": "#/components/schemas/ChainCode" },
+          "senderAddress": { "type": "string" },
           "receiverAddress": { "type": "string" },
           "amount": { "type": "number" },
+          "destinationAmount": {
+            "type": "number",
+            "description": "Amount credited on the destination chain after FX conversion."
+          },
           "status": { "type": "string" },
           "createdAt": { "type": "string", "format": "date-time" },
           "updatedAt": { "type": "string", "format": "date-time" }

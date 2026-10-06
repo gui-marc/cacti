@@ -163,6 +163,7 @@ function main() {
     instanceId: "partner-a-instance",
     httpPort: 5100,
     publicBaseUrl: `http://${HOST_PARTNER_A}:5100`,
+    peerUrls: [`http://${HOST_PARTNER_B}:5200`],
     centralBanks: [
       {
         chainCode: "besu",
@@ -189,6 +190,7 @@ function main() {
     instanceId: "partner-b-instance",
     httpPort: 5200,
     publicBaseUrl: `http://${HOST_PARTNER_B}:5200`,
+    peerUrls: [`http://${HOST_PARTNER_A}:5100`],
     centralBanks: [
       {
         chainCode: "besu",

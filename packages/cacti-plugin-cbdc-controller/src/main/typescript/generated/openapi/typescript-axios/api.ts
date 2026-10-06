@@ -229,6 +229,12 @@ export interface InitiateTransactionResponsePayload {
      */
     'transactionId': string;
     /**
+     * Amount credited on the destination chain after applying the FX rate.
+     * @type {number}
+     * @memberof InitiateTransactionResponsePayload
+     */
+    'destinationAmount'?: number;
+    /**
      * Optional status indicator. Present when the transaction requires manual review.
      * @type {string}
      * @memberof InitiateTransactionResponsePayload

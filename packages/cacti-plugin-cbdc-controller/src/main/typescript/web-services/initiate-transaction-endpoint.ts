@@ -109,10 +109,11 @@ export class InitiateTransactionEndpointV1 implements IWebServiceEndpoint {
     });
 
     const status = result.kind === "marked_for_review" ? 202 : 200;
+    const { transactionId, destinationAmount } = result;
     const body =
       result.kind === "marked_for_review"
-        ? { transactionId: result.transactionId, status: "MARKED_FOR_REVIEW" }
-        : { transactionId: result.transactionId };
+        ? { transactionId, destinationAmount, status: "MARKED_FOR_REVIEW" }
+        : { transactionId, destinationAmount };
 
     await sendSignedJson(res, status, body, call, verifierOptions);
   }

@@ -38,9 +38,9 @@ import {
   IEthereumLeafOptions,
   IEthereumNetworkConfig,
   INetworkOptions,
-} from "@hyperledger/cactus-plugin-satp-hermes/src/main/typescript/cross-chain-mechanisms/bridge/bridge-types";
+} from "@hyperledger/cactus-plugin-satp-hermes/dist/lib/main/typescript/cross-chain-mechanisms/bridge/bridge-types";
 import { TokenType } from "@hyperledger/cactus-plugin-satp-hermes";
-import { OntologyManager } from "@hyperledger/cactus-plugin-satp-hermes/src/main/typescript/cross-chain-mechanisms/bridge/ontology/ontology-manager";
+import { OntologyManager } from "@hyperledger/cactus-plugin-satp-hermes/dist/lib/main/typescript/cross-chain-mechanisms/bridge/ontology/ontology-manager";
 export interface IEthereumTestEnvironment {
   logLevel: LogLevelDesc;
   network?: string;

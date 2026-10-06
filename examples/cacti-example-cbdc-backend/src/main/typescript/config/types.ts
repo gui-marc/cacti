@@ -71,6 +71,9 @@ export interface IPartnerConfig {
   instanceId: string;
   httpPort: number;
   publicBaseUrl: string;
+  /** Base URLs of the other partners, notified of transactions whose receiver
+   *  is not a local customer so the receiving bank also records them. */
+  peerUrls?: string[];
   centralBanks: ICentralBankPeerConfig[];
   chains: Record<ChainCode, IChainRuntimeConfig>;
   seedUsers: ISeedUser[];
