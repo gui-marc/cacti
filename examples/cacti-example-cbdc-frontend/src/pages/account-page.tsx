@@ -18,6 +18,8 @@ import {
   BanknoteArrowDown,
   BanknoteArrowUp,
   ArrowRightLeftIcon,
+  CheckIcon,
+  CopyIcon,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table"
@@ -78,6 +80,15 @@ export default function AccountPage() {
               <h1 className="font-mono text-3xl font-bold">
                 {Number(currentAccount?.balance).toFixed(2)}
               </h1>
+              <p className="flex items-center gap-1 text-sm text-muted-foreground">
+                {currentAccount?.account}
+                {currentAccount?.account && (
+                  <CopyButton
+                    key={currentAccount.account}
+                    value={currentAccount.account}
+                  />
+                )}
+              </p>
             </div>
 
             <CreateTransactionDialog>
@@ -171,6 +182,27 @@ export default function AccountPage() {
         </div>
       </div>
     </Protected>
+  )
+}
+
+function CopyButton({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false)
+
+  async function copy() {
+    await navigator.clipboard.writeText(value)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  return (
+    <Button
+      variant="ghost"
+      size="icon-xs"
+      aria-label="Copy account number"
+      onClick={copy}
+    >
+      {copied ? <CheckIcon /> : <CopyIcon />}
+    </Button>
   )
 }
 

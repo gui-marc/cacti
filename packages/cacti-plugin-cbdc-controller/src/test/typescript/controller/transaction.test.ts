@@ -171,6 +171,42 @@ describe("Transaction Controller", () => {
     });
   });
 
+  it("should transfer 1:1 without FX when source and destination chain match", async () => {
+    const fxStrategy = new ConstantFxProvisionStrategy(0.5);
+    const requestFXQuote = jest.spyOn(fxStrategy, "requestFXQuote");
+    const confirmSettlement = jest.spyOn(fxStrategy, "confirmSettlement");
+
+    const controller = new CBDCController({
+      transactionStore,
+      fxProvisionStrategy: fxStrategy,
+      complianceEndpointsStore,
+      partnerSecurityService,
+      infrastructure: {
+        environments: {
+          cbdc_a: cbdc_a_environment,
+          cbdc_b: cbdc_b_environment,
+        },
+      },
+      logLevel,
+      requireHttps: false,
+    });
+
+    const result = await controller.initiateTransaction({
+      amount: 100,
+      complianceProviders: [complianceEndpointId],
+      initiatorId,
+      sourceChainCode: "cbdc_a",
+      destinationChainCode: "cbdc_a",
+      receiverAddress: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+      senderAddress: "0x1234567890abcdef1234567890abcdef12345678",
+      timeToExpire: new Date(Date.now() + 60 * 60 * 1000), // 1 hour from now
+    });
+
+    expect(result.destinationAmount).toBe(100);
+    expect(requestFXQuote).not.toHaveBeenCalled();
+    expect(confirmSettlement).not.toHaveBeenCalled();
+  });
+
   it("should fail if compliance check fails", async () => {
     complianceProvider.setNextCheckResponse(ComplianceResult.REJECTED);
 

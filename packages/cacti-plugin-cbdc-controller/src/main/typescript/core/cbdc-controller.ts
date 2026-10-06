@@ -80,12 +80,7 @@ export default class CBDCController {
     try {
       await this.requestTransactionFXRate(transaction);
     } catch (error) {
-      await this.fxProvisionStrategy.releaseLiquidity(
-        transactionID,
-        req.sourceChainCode,
-        req.destinationChainCode,
-        req.amount,
-      );
+      await this.releaseLiquidity(transaction);
 
       await this.store.update(transactionID, {
         ...transaction,
@@ -105,12 +100,7 @@ export default class CBDCController {
     }
 
     if (complianceResult === ComplianceResult.REJECTED) {
-      await this.fxProvisionStrategy.releaseLiquidity(
-        transactionID,
-        req.sourceChainCode,
-        req.destinationChainCode,
-        req.amount,
-      );
+      await this.releaseLiquidity(transaction);
       await this.store.update(transactionID, {
         ...persisted,
         status: TransactionStatus.FAILED,
@@ -140,6 +130,26 @@ export default class CBDCController {
       transactionId: transactionID,
       destinationAmount: this.destinationAmount(persisted),
     };
+  }
+
+  /**
+   * A transfer within a single chain moves the same currency, so there is no
+   * exchange to quote, reserve or settle: it is always 1:1.
+   */
+  private requiresFX(transaction: ITransaction): boolean {
+    return transaction.sourceChainCode !== transaction.destinationChainCode;
+  }
+
+  private async releaseLiquidity(transaction: ITransaction): Promise<void> {
+    if (!this.requiresFX(transaction)) {
+      return;
+    }
+    await this.fxProvisionStrategy.releaseLiquidity(
+      transaction.id,
+      transaction.sourceChainCode,
+      transaction.destinationChainCode,
+      transaction.amount,
+    );
   }
 
   /** Amount credited on the destination chain once the FX rate is applied. */
@@ -207,12 +217,7 @@ export default class CBDCController {
       return;
     }
     try {
-      await this.fxProvisionStrategy.releaseLiquidity(
-        transactionId,
-        transaction.sourceChainCode,
-        transaction.destinationChainCode,
-        transaction.amount,
-      );
+      await this.releaseLiquidity(transaction);
     } catch (error) {
       this.log.error(
         `Error releasing liquidity for expired transaction ${transactionId}`,
@@ -261,6 +266,10 @@ export default class CBDCController {
   private async confirmSettlementWithRetry(
     transaction: ITransaction,
   ): Promise<boolean> {
+    if (!this.requiresFX(transaction)) {
+      return true;
+    }
+
     const maxAttempts = 5;
     let backoffMs = 500;
 
@@ -296,6 +305,15 @@ export default class CBDCController {
   private async requestTransactionFXRate(
     transaction: ITransaction,
   ): Promise<void> {
+    if (!this.requiresFX(transaction)) {
+      await this.store.update(transaction.id, {
+        ...transaction,
+        fxRate: 1,
+        status: TransactionStatus.COMPLIANCE_CHECKS,
+      });
+      return;
+    }
+
     const quote = await this.fxProvisionStrategy.requestFXQuote(
       transaction.id,
       transaction.sourceChainCode,
